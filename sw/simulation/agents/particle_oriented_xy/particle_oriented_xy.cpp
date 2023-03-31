@@ -9,12 +9,12 @@ particle_oriented_xy::particle_oriented_xy(int i, vector<float> s, float tstep)
   state = s;
   ID = i;
   dt = tstep;
-  orientation = state[6];
+  orientation = state[STATE_YAW];
   controller->set_saturation(0.5);
   manual = false;
 }
 
-vector<float> particle_oriented_xy::state_update(vector<float> state)
+vector<float> particle_oriented_xy::state_update(vector<float> s)
 {
   // NED frame
   // x+ towards North
@@ -31,30 +31,30 @@ vector<float> particle_oriented_xy::state_update(vector<float> state)
   controller->saturate(vx_des);
   controller->saturate(vy_des);
 #if COMMAND_LOCAL
-  rotate_xy(vx_des, vy_des, state[6], vx_global, vy_global);
+  rotate_l2g_xy(vx_des, vy_des, s[STATE_YAW], vx_global, vy_global);
 #else
   vx_global = vx_des;
   vy_global = vy_des;
 #endif
-  state.at(7) = dpsirate;
-  state.at(6) += state[7] * dt;
-  orientation = wrapToPi_f(state[6]);
+  s.at(STATE_YAWRATE) = dpsirate;
+  s.at(STATE_YAW) += s[STATE_YAWRATE] * dt;
+  orientation = wrapToPi_f(s[STATE_YAW]);
 
   // Acceleration control
   float ka = 2;
-  state.at(4) = ka * (vx_global - state[2]); // Acceleration global frame
-  state.at(5) = ka * (vy_global - state[3]); // Acceleration global frame
+  s.at(STATE_AX) = ka * (vx_global - s[STATE_VX]); // Acceleration global frame
+  s.at(STATE_AY) = ka * (vy_global - s[STATE_VY]); // Acceleration global frame
   moving = controller->moving;
 
   // Velocity
-  state.at(2) += state[4] * dt; // Velocity x global frame
-  state.at(3) += state[5] * dt; // Velocity y global frame
+  s.at(STATE_VX) += s[STATE_AX] * dt; // Velocity x global frame
+  s.at(STATE_VY) += s[STATE_AY] * dt; // Velocity y global frame
 
   // Position
-  state.at(0) += state[2] * dt + 0.5 * state[4] * pow(dt, 2); // Position x global frame
-  state.at(1) += state[3] * dt + 0.5 * state[5] * pow(dt, 2); // Position y global frame
+  s.at(STATE_X) += s[STATE_VX] * dt + 0.5 * s[STATE_AX] * pow(dt, 2); // Position x global frame
+  s.at(STATE_Y) += s[STATE_VY] * dt + 0.5 * s[STATE_AY] * pow(dt, 2); // Position y global frame
 
-  return state;
+  return s;
 };
 
 void particle_oriented_xy::animation()

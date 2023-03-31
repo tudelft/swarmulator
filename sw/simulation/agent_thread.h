@@ -28,12 +28,12 @@ void run_agent_simulation_step(const int &ID)
 {
   while (program_running) {
 
-    bool ready = (s.size() == nagents || simtime_seconds > 0.);
+    bool ready = (agents.size() == nagents || simtime_seconds > 0.);
     if (ready) {
-      mtx.lock_shared();
-      std::vector<float> s_0 = s.at(ID)->state;
-      std::vector<float> s_n = s.at(ID)->state_update(s_0); // State update
-      mtx.unlock_shared();
+      main_mutex.lock_shared();
+      std::vector<float> s_0 = agents.at(ID)->state;
+      std::vector<float> s_n = agents.at(ID)->state_update(s_0); // State update
+      main_mutex.unlock_shared();
 
       /****** Wall physics engine ********/
       // The dynamics are updated unless the robot crashes into a wall, at which point the velocity and acceleration are set to 0.
@@ -44,7 +44,7 @@ void run_agent_simulation_step(const int &ID)
       float r_temp, ang_temp, vx_temp, vy_temp;
 
       // Get direction of velocity vector
-      cart2polar(s_n[2], s_n[3], r_temp, ang_temp);
+      cart2polar(s_n[STATE_VX], s_n[STATE_VY], r_temp, ang_temp);
 
       // Detect a potential crash by projecting the position forward based on the velocity, based on a simple test of whether the collision could happen within one second, provided the current velocity is kept.
       // Here we just project the velocity.
@@ -54,22 +54,22 @@ void run_agent_simulation_step(const int &ID)
 
       // Check if hitting the wall.
       // Update or kill the dynamics in case of collision.
-      // The environment.sensor function checks whether the vector s0->test intersects with any walls.
-      if (!environment.sensor(ID, s_0, test, ang_temp)) {
+      // The environment.check_for_collision function checks whether the vector s0->test intersects with any walls.
+      if (!environment.check_for_collision(ID, s_0, test, ang_temp)) {
         // No wall collision --> Update the dynamics
-        mtx.lock(); // Sync
-        s.at(ID)->state = s_n; // Update
-        mtx.unlock();
+        main_mutex.lock(); // Sync
+        agents.at(ID)->state = s_n; // Update
+        main_mutex.unlock();
       }
 
       else { // Wall! --> Kill the dynamics!
-        mtx.lock(); // Sync
-        s.at(ID)->state[2] = 0.0; // v_x = 0
-        s.at(ID)->state[3] = 0.0; // v_y = 0
-        s.at(ID)->state[4] = 0.0; // a_x = 0
-        s.at(ID)->state[5] = 0.0; // a_y = 0
-        s.at(ID)->controller->moving = false; // Not moving
-        mtx.unlock();
+        main_mutex.lock(); // Sync
+        agents.at(ID)->state[STATE_VX] = 0.0; // v_x = 0
+        agents.at(ID)->state[STATE_VY] = 0.0; // v_y = 0
+        agents.at(ID)->state[STATE_AX] = 0.0; // a_x = 0
+        agents.at(ID)->state[STATE_AY] = 0.0; // a_y = 0
+        agents.at(ID)->controller->moving = false; // Not moving
+        main_mutex.unlock();
       }
 
       // Update the global clock.
@@ -104,9 +104,9 @@ void create_new_agent(const int &ID, const std::vector<float> &states)
   // >> make AGENT=myawesomeagent
   // By default, AGENT=particle
   // See wiki for a detailed explanation of how to create your own agent.
-  mtx.lock();
-  s.push_back(new AGENT(ID, states, 1.0 / param->simulation_updatefreq()));
-  mtx.unlock();
+  main_mutex.lock();
+  agents.push_back(new AGENT(ID, states, 1.0 / param->simulation_updatefreq()));
+  main_mutex.unlock();
 
   // Info message
   std::stringstream ss;

@@ -21,14 +21,14 @@ void txtwrite::txtwrite_state(ofstream &logfile)
 {
   std::stringstream t; // time
   t << simtime_seconds; // Write down time
-  vector<Agent *> state_buff = s; // Get state
+  vector<Agent *> state_buff = agents; // Get state
   float f = evaluate_fitness(); // Evaluate fitness
-  for (uint16_t i = 0; i < s.size(); i++) {
+  for (uint16_t i = 0; i < agents.size(); i++) {
     logfile << t.str() << " " // time
-            << i + 1 << " "; // ID
-    for (uint16_t j = 0; j < 2; j++) { // position state 0 and 1
-      logfile << state_buff[i]->state.at(j) << " "; // log states
-    }
+            << i + 1 << " " // ID
+            << state_buff[i]->state.at(STATE_X) << " "  // position x
+            << state_buff[i]->state.at(STATE_Y) << " "; // position y
+
     logfile << f; // fitness
     logfile << endl; // new line
   }

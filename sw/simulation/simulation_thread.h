@@ -113,12 +113,12 @@ void main_simulation_thread(int argc, char *argv[], std::string id)
         // Quit after a certain amount of time
         if (simtime_seconds > param->time_limit()) {
 
-          mtx.lock(); // Lock main mutex
-          mtx_env.lock(); // Lock environment mutex
+          main_mutex.lock(); // Lock main mutex
+          environment_mutex.lock(); // Lock environment mutex
           terminalinfo::debug_msg("Sending message");
           f.send(evaluate_fitness()); // Send FIFO message
-          mtx_env.unlock(); // Unlock environment mutex
-          mtx.unlock(); // Unlock main mutex
+          environment_mutex.unlock(); // Unlock environment mutex
+          main_mutex.unlock(); // Unlock main mutex
 
           program_running = false; // Get ready to quit
         }

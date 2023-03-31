@@ -53,7 +53,7 @@ void Controller::get_lattice_motion_range(const int &ID, float &v_x, float &v_y,
   std::vector<uint> closest = o.request_closest(ID);
   std::vector<uint> q_ID;
   q_ID.clear();
-  for (uint16_t i = 0; i < s.size() - 1; i++) {
+  for (uint16_t i = 0; i < agents.size() - 1; i++) {
     if (o.request_distance(ID, closest[i]) < rangemax) {
       q_ID.push_back(closest[i]); // Log ID (for simulation purposes only, depending on assumptions)
     }
@@ -100,14 +100,14 @@ void Controller::set_saturation(const float &lim)
 bool Controller::wall_avoidance_bounce(const uint16_t ID, float &v_x, float &v_y, float rangesensor)
 {
   // Predict what the command wants and see if it will hit a wall, then fix it.
-  std::vector<float> sn = s[ID]->state;
+  std::vector<float> sn = agents[ID]->state;
   float r_temp, ang_temp, vx_temp, vy_temp;
   cart2polar(v_x, v_y, r_temp, ang_temp); // direction of velocity
   polar2cart(rangesensor, ang_temp, vx_temp, vy_temp); // use rangesensor to sense walls
   sn[0] += vx_temp;
   sn[1] += vy_temp;
   float slope;
-  bool test = environment.sensor(ID, sn, s[ID]->state, slope);
+  bool test = environment.check_for_collision(ID, sn, agents[ID]->state, slope);
   if (test) {
     float v, ang;
     cart2polar(v_x, v_y, v, ang);
@@ -122,23 +122,23 @@ bool Controller::wall_avoidance_bounce(const uint16_t ID, float &v_x, float &v_y
 bool Controller::wall_avoidance_turn(const uint16_t ID, float &v, float &dpsitheta, float rangesensor)
 {
   // Predict what the command wants and see if it will hit a wall, then fix it.
-  std::vector<float> sn = s[ID]->state;
+  std::vector<float> sn = agents[ID]->state;
   float r_temp, ang_temp, vx_temp, vy_temp, vx_global, vy_global, slope;
-  rotate_xy(0.5, 0.5, sn[6], vx_global, vy_global);
+  rotate_l2g_xy(0.5, 0.5, sn[6], vx_global, vy_global);
   cart2polar(vx_global, vy_global, r_temp, ang_temp); // direction of velocity
   polar2cart(rangesensor, ang_temp, vx_temp, vy_temp); // use rangesensor to sense walls
   sn[0] += vx_temp;
   sn[1] += vy_temp;
-  bool test1 = environment.sensor(ID, sn, s[ID]->state, slope);
+  bool test1 = environment.check_for_collision(ID, sn, agents[ID]->state, slope);
 
-  sn = s[ID]->state;
-  rotate_xy(0.5, -0.5, sn[6], vx_global, vy_global);
+  sn = agents[ID]->state;
+  rotate_l2g_xy(0.5, -0.5, sn[6], vx_global, vy_global);
   cart2polar(vx_global, vy_global, r_temp, ang_temp); // direction of velocity
   polar2cart(rangesensor, ang_temp, vx_temp, vy_temp); // use rangesensor to sense walls
   sn[0] += vx_temp;
   sn[1] += vy_temp;
 
-  bool test2 = environment.sensor(ID, sn, s[ID]->state, slope);
+  bool test2 = environment.check_for_collision(ID, sn, agents[ID]->state, slope);
   if (test1 || test2) {
     v = 0.;
     dpsitheta = 0.4;

@@ -10,6 +10,20 @@
 #include "terminalinfo.h"
 #include CONTROLLER_INCLUDE
 
+
+/**
+ * State Indices
+ */
+#define STATE_X       0
+#define STATE_Y       1
+#define STATE_VX      2
+#define STATE_VY      3
+#define STATE_AX      4
+#define STATE_AY      5
+#define STATE_YAW     6
+#define STATE_YAWRATE 7
+#define STATE_DIM     8
+
 /**
  * Parent class defining an agent. The dynamic implementation is handled in children classes.
  */

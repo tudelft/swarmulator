@@ -15,7 +15,7 @@ float Agent::get_position(uint16_t dim)
 
 float Agent::get_orientation()
 {
-  return state[6];
+  return state[STATE_YAW];
 }
 
 float Agent::get_state(const uint16_t i)

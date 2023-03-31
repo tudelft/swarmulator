@@ -16,11 +16,11 @@ Environment::Environment(void)
 {
   define_walls();
   if (!strcmp(param->fitness().c_str(), "food")) {
-    mtx_env.lock();
+    environment_mutex.lock();
     environment.define_food(100);
     environment.define_beacon(0., 0.);
     environment.nest = 8;
-    mtx_env.unlock();
+    environment_mutex.unlock();
   }
 }
 
@@ -76,16 +76,16 @@ float Environment::limits(void)
 
 void Environment::add_wall(float x0, float y0, float x1, float y1)
 {
-  mtx.lock();
+  main_mutex.lock();
   walls.push_back(std::vector<float>());
   walls[walls.size() - 1].push_back(x0);
   walls[walls.size() - 1].push_back(y0);
   walls[walls.size() - 1].push_back(x1);
   walls[walls.size() - 1].push_back(y1);
-  mtx.unlock();
+  main_mutex.unlock();
 }
 
-bool Environment::sensor(const uint16_t ID, std::vector<float> s_n, std::vector<float> s, float &angle)
+bool Environment::check_for_collision(const uint16_t ID, std::vector<float> s_n, std::vector<float> s, float &angle)
 {
   Point p1, q1, p2, q2;
   p1.y = s[0]; // Flip axis
@@ -146,29 +146,29 @@ void Environment::animate(void)
 void Environment::grab_food(uint64_t food_ID)
 {
   float lim = limits();
-  mtx_env.lock();
+  environment_mutex.lock();
   // uncomment one of the two line below
   // food.erase(food.begin() + food_ID); // Use this to grab without replacement
   food[food_ID] = {rg.uniform_float(-lim, lim), rg.uniform_float(-lim, lim)}; // Use this to grab with replacement
-  mtx_env.unlock();
+  environment_mutex.unlock();
 }
 
 void Environment::drop_food()
 {
-  mtx_env.lock();
+  environment_mutex.lock();
   nest += 1.;
-  mtx_env.unlock();
+  environment_mutex.unlock();
 }
 
 void Environment::eat_food(float amount)
 {
-  mtx_env.lock();
+  environment_mutex.lock();
   if (nest > amount) { nest -= amount; }
-  mtx_env.unlock();
+  environment_mutex.unlock();
 }
 
 void Environment::loop()
 {
-  float rate = (0.001 / param->simulation_updatefreq()) * s.size();
+  float rate = (0.001 / param->simulation_updatefreq()) * agents.size();
   eat_food(rate);
 }

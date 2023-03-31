@@ -20,7 +20,7 @@ public:
   /**
    * State update implementation
    */
-  std::vector<float> state_update(std::vector<float> state);
+  std::vector<float> state_update(std::vector<float> s);
 
   /**
    * Animation openGL implementation for visualization

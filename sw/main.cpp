@@ -34,9 +34,9 @@ std::unique_ptr<parameters_t> param(parameters("conf/parameters.xml", xml_schema
  * Global variables used throughout simulation
  */
 uint nagents; // Number of agents in the simulation
-std::vector<Agent *> s; // Set up the agents
-std::shared_mutex mtx; // Mutex needed to lock threads
-std::shared_mutex mtx_env; // Mutex needed to lock threads
+std::vector<Agent *> agents; // Set up the agents
+std::shared_mutex main_mutex; // Mutex needed to lock threads
+std::shared_mutex environment_mutex; // Mutex needed to lock threads
 float realtimefactor; // Real time factor of simulation
 float simtime_seconds = 0; // Initial simulation time
 bool program_running  = false; // Program running, initiated false until the beginning

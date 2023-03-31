@@ -150,8 +150,8 @@ void draw::agent(const uint16_t &ID, const float &x, const float &y, const float
   glPushMatrix();
   glTranslatef(y * xrat, x * yrat, 0.0); // ENU to NED
   glRotatef(90.0 - rad2deg(orientation), 0.0, 0, 1);
-  s[ID]->animation(); // Uses the animation function defined by the agent in use
-  s[ID]->controller->animation(ID); // Draws additional stuff from the controller, such as sensors
+  agents[ID]->animation(); // Uses the animation function defined by the agent in use
+  agents[ID]->controller->animation(ID); // Draws additional stuff from the controller, such as sensors
   agent_number(ID);
   glPopMatrix();
 }

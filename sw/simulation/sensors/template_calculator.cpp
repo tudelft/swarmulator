@@ -120,7 +120,7 @@ void Template_Calculator::assess_situation(uint16_t ID, vector<bool> &q, vector<
 
   // Fill the template with respect to the agent in question
   vector<uint> closest = o.request_closest(ID);
-  for (uint16_t i = 0; i < s.size() - 1; i++) {
+  for (uint16_t i = 0; i < agents.size() - 1; i++) {
     if (fill_template(q, // Vector to fill
                       wrapTo2Pi_f(o.request_bearing(ID, closest[i])), // Bearing
                       o.request_distance(ID, closest[i]), // Distance

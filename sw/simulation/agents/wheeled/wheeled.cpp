@@ -9,7 +9,7 @@ wheeled::wheeled(int i, vector<float> s, float tstep)
   state = s;
   ID = i;
   dt = tstep;
-  orientation = state[6];
+  orientation = state[STATE_YAW];
 }
 
 vector<float> wheeled::state_update(vector<float> state)
@@ -27,19 +27,19 @@ vector<float> wheeled::state_update(vector<float> state)
   float psi_rate = - r / L * leftwheelspeed + r / L * rightwheelspeed;
 
   // Orientation
-  state.at(7) = psi_rate; // Orientation rate
-  state.at(6) += state.at(7); // Orientation
+  state.at(STATE_YAWRATE) = psi_rate; // Orientation rate
+  state.at(STATE_YAW) += state.at(STATE_YAWRATE); // Orientation
   orientation = state.at(6);
 
   // Velocity
   float vxr, vyr;
-  rotate_xy(v_x, v_y, orientation, vxr, vyr); // Local frame to global frame
-  state.at(2) = vxr; // Velocity x
-  state.at(3) = vyr; // Velocity y
+  rotate_l2g_xy(v_x, v_y, orientation, vxr, vyr); // Local frame to global frame
+  state.at(STATE_VX) = vxr; // Velocity x
+  state.at(STATE_VY) = vyr; // Velocity y
 
   // Position
-  state.at(0) += state[2] * dt; // Position x
-  state.at(1) += state[3] * dt; // Position y
+  state.at(STATE_X) += state[STATE_VX] * dt; // Position x
+  state.at(STATE_Y) += state[STATE_VY] * dt; // Position y
 
   return state;
 }

@@ -11,7 +11,7 @@ particle::particle(int i, std::vector<float> s, float tstep)
   controller->set_saturation(1.0);
 }
 
-std::vector<float> particle::state_update(std::vector<float> state)
+std::vector<float> particle::state_update(std::vector<float> s)
 {
   // NED frame
   // x+ towards North
@@ -25,21 +25,21 @@ std::vector<float> particle::state_update(std::vector<float> state)
   moving = controller->moving;
 
   float vxr, vyr;
-  rotate_xy(v_x, v_y, orientation, vxr, vyr);
+  rotate_l2g_xy(v_x, v_y, orientation, vxr, vyr);
 
   // Acceleration
-  state.at(4) = 2 * (vxr - state[2]); // Acceleration x
-  state.at(5) = 2 * (vyr - state[3]); // Acceleration y
+  s.at(STATE_AX) = 2 * (vxr - s[STATE_VX]); // Acceleration x
+  s.at(STATE_AY) = 2 * (vyr - s[STATE_VY]); // Acceleration y
 
   // Velocity
-  state.at(2) += state[4] * dt; // Velocity x
-  state.at(3) += state[5] * dt; // Velocity y
+  s.at(STATE_VX) += s[STATE_AX] * dt; // Velocity x
+  s.at(STATE_VY) += s[STATE_AY] * dt; // Velocity y
 
   // Position
-  state.at(0) += state[2] * dt + 0.5 * state[4] * pow(dt, 2); // Position x
-  state.at(1) += state[3] * dt + 0.5 * state[5] * pow(dt, 2); // Position y
+  s.at(STATE_X) += s[STATE_VX] * dt + 0.5 * s[STATE_AX] * pow(dt, 2); // Position x
+  s.at(STATE_Y) += s[STATE_VY] * dt + 0.5 * s[STATE_AY] * pow(dt, 2); // Position y
 
-  return state;
+  return s;
 };
 
 void particle::animation()

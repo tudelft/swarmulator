@@ -114,18 +114,33 @@ inline static void cart2polar(const float &x, const float &y, float &r, float &t
 }
 
 /**
- * Rotates a vector (x,y) by a certain angle theta
+ * Rotates a vector from local to global coordinates
  *
- * @param x Value of x in cartesian coordinates (East)
- * @param y Value of y in cartesian coordinates (North)
- * @param theta Angle of rotation
- * @param xr Rotated x
- * @param yr Rotated y
+ * @param x_loc Value of x in local cartesian coordinates
+ * @param y_loc Value of y in local cartesian coordinates
+ * @param yaw Angle of rotation in rad
+ * @param x_global Rotated x in global coordinates
+ * @param y_global Rotated y in global coordinates
  */
-inline static void rotate_xy(const float &x, const float &y, const float &theta, float &xr, float &yr)
+inline static void rotate_l2g_xy(const float &x_loc, const float &y_loc, const float &yaw, float &x_global, float &y_global)
 {
-  xr = x * cos(theta) - y * sin(theta);
-  yr = x * sin(theta) + y * cos(theta);
+  x_global = x_loc * cos(yaw) - y_loc * sin(yaw);
+  y_global = x_loc * sin(yaw) + y_loc * cos(yaw);
+}
+
+/**
+ * Rotates a vector from global to local coordinates
+ *
+ * @param x_global Value of x in global cartesian coordinates
+ * @param y_global Value of y in global cartesian coordinates
+ * @param yaw Angle of rotation in rad
+ * @param x_loc Rotated x in local coordinates
+ * @param y_loc Rotated y in local coordinates
+ */
+inline static void rotate_g2l_xy(const float &x_global, const float &y_global, const float &yaw, float &x_loc, float &y_loc)
+{
+  x_loc =  x_global * cos(yaw) + y_global * sin(yaw);
+  y_loc = -x_global * sin(yaw) + y_global * cos(yaw);
 }
 
 #endif /*TRIGONOMETRY_H*/

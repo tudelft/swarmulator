@@ -12,9 +12,9 @@ inline static float mean_number_of_neighbors()
 {
   float f = 0.;
   OmniscientObserver o;
-  for (size_t ID = 0; ID < s.size(); ID++) {
-    std::vector<uint> closest = o.request_closest_inrange(ID, s[ID]->controller->get_max_sensor_range());
-    f += (float)closest.size() / (float)s.size();
+  for (size_t ID = 0; ID < agents.size(); ID++) {
+    std::vector<uint> closest = o.request_closest_inrange(ID, agents[ID]->controller->get_max_sensor_range());
+    f += (float)closest.size() / (float)agents.size();
   }
   return f;
 }
@@ -28,11 +28,11 @@ inline static float mean_dist_to_all()
 {
   float f = 0.;
   OmniscientObserver o;
-  for (size_t ID = 0; ID < s.size(); ID++) {
+  for (size_t ID = 0; ID < agents.size(); ID++) {
     std::vector<float> r, b;
     o.relative_location(ID, r, b);
     float r_mean = accumulate(r.begin(), r.end(), 0.0) / r.size();
-    f += (float)r_mean / (float)s.size();
+    f += (float)r_mean / (float)agents.size();
   }
   return f;
 }
@@ -46,11 +46,11 @@ inline static float mean_dist_to_neighbors()
 {
   float f = 0.;
   OmniscientObserver o;
-  for (size_t ID = 0; ID < s.size(); ID++) {
+  for (size_t ID = 0; ID < agents.size(); ID++) {
     std::vector<float> r, b;
-    o.relative_location_inrange(ID, s[ID]->controller->get_max_sensor_range(), r, b);
+    o.relative_location_inrange(ID, agents[ID]->controller->get_max_sensor_range(), r, b);
     float r_mean = accumulate(r.begin(), r.end(), 0.0) / r.size();
-    f += (float)r_mean / (float)s.size();
+    f += (float)r_mean / (float)agents.size();
   }
   return f;
 }
@@ -63,7 +63,7 @@ inline static float mean_dist_to_neighbors()
 inline static void connectivity_check(float &f)
 {
   OmniscientObserver o;
-  if (!(o.connected_graph_range(s[0]->controller->get_max_sensor_range()))) {
+  if (!(o.connected_graph_range(agents[0]->controller->get_max_sensor_range()))) {
     f = 0.0;
   }
 }
@@ -76,9 +76,9 @@ inline static void connectivity_check(float &f)
 inline static uint number_of_clusters()
 {
   OmniscientObserver o;
-  Graph g(s.size());
-  for (size_t ID = 0; ID < s.size(); ID++) {
-    std::vector<uint> neighbors = o.request_closest_inrange(ID, s[ID]->controller->get_max_sensor_range());
+  Graph g(agents.size());
+  for (size_t ID = 0; ID < agents.size(); ID++) {
+    std::vector<uint> neighbors = o.request_closest_inrange(ID, agents[ID]->controller->get_max_sensor_range());
     for (size_t j = 0; j < neighbors.size(); j++) {
       g.addEdge(ID, neighbors[j]);
     }

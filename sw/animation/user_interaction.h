@@ -63,23 +63,23 @@ void keyboard_callback(unsigned char key, __attribute__((unused)) int a, __attri
       if (!paused) {
         terminalinfo::info_msg("Paused. Press `r' to resume or `s' to step forward.");
         paused = true;
-        mtx.lock();
+        main_mutex.lock();
       }
       break;
     case 'r': // Resume the simulation (if paused)
       if (paused) {
         terminalinfo::info_msg("Resuming.");
         paused = false;
-        mtx.unlock();
+        main_mutex.unlock();
       }
       break;
     case 's': // Step through the simulation. Very useful for debugging or analyzing what's going on.
       if (paused) {
         terminalinfo::info_msg("Stepping through. Press `s' to keep stepping forwrad to `r' to resume. ");
-        mtx.unlock();
+        main_mutex.unlock();
         int t_wait = (int)1e6 * (1.0 / (param->simulation_updatefreq() * param->simulation_realtimefactor()));
         std::this_thread::sleep_for(std::chrono::microseconds(t_wait));
-        mtx.lock();
+        main_mutex.lock();
       }
       break;
     case 'a': // Draw and simulate a new agent, initialized at the current pointer position
@@ -87,7 +87,7 @@ void keyboard_callback(unsigned char key, __attribute__((unused)) int a, __attri
         terminalinfo::info_msg("Drawing new agent.");
         random_generator rg;
         std::vector<float> states = {pointer_y, pointer_x, 0.0, 0.0, 0.0, 0.0, rg.uniform_float(-M_PI, M_PI), 0.0}; // Initial positions/states
-        create_new_agent(s.size(), states);
+        create_new_agent(agents.size(), states);
         break;
       }
     case 'm': // Toggle the real time parameter between 1 and default, so as to better understand what's going on
@@ -100,10 +100,10 @@ void keyboard_callback(unsigned char key, __attribute__((unused)) int a, __attri
       }
       break;
     case '1': // Turn the agent with 0.1 rad/s
-      s[0]->manualpsi_delta = 0.1;
+      agents[0]->manualpsi_delta = 0.1;
       break;
     case '2': // Turn the agent with -0.1 rad/s
-      s[0]->manualpsi_delta = -0.1;
+      agents[0]->manualpsi_delta = -0.1;
       break;
     case 'n': // Quit and restart swarmulator
       terminalinfo::info_msg("Restarting.");
@@ -206,23 +206,23 @@ void mouse_click_callback(int button, int state, int x, int y)
  */
 void catchKey_arrow(int key, __attribute__((unused)) int a, __attribute__((unused)) int b)
 {
-  s[0]->manual = true;
+  agents[0]->manual = true;
   float vnominal = 1.0;
   // if (key == GLUT_KEY_LEFT) {
-  //   s[0]->manualy = -vnominal;
-  //   s[0]->manualx = 0;
+  //   agents[0]->manualy = -vnominal;
+  //   agents[0]->manualx = 0;
   // }
   // if (key == GLUT_KEY_RIGHT) {
-  //   s[0]->manualy = vnominal;
-  //   s[0]->manualx = 0;
+  //   agents[0]->manualy = vnominal;
+  //   agents[0]->manualx = 0;
   // }
   if (key == GLUT_KEY_DOWN) {
-    s[0]->manualx = -vnominal;
-    s[0]->manualy = 0;
+    agents[0]->manualx = -vnominal;
+    agents[0]->manualy = 0;
   }
   if (key == GLUT_KEY_UP) {
-    s[0]->manualx = vnominal;
-    s[0]->manualy = 0;
+    agents[0]->manualx = vnominal;
+    agents[0]->manualy = 0;
   }
 
   if (key == GLUT_KEY_F11) {
@@ -239,13 +239,13 @@ void catchKey_arrow(int key, __attribute__((unused)) int a, __attribute__((unuse
  */
 void catckKey_arrow_up(int key, __attribute__((unused)) int a, __attribute__((unused)) int b)
 {
-  s[0]->manualx = 0;
-  s[0]->manualy = 0;
+  agents[0]->manualx = 0;
+  agents[0]->manualy = 0;
 }
 
 void psi_callback_up(unsigned char key, int x, int y)
 {
-  s[0]->manualpsi_delta = 0;
+  agents[0]->manualpsi_delta = 0;
 }
 
 /**

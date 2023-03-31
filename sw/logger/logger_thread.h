@@ -32,10 +32,10 @@ void run_logger(std::ofstream &logfile, std::string filename)
 
   // Write the logfile
   if (!paused && simtime_seconds > simtime_seconds_old + 1. / param->logger_updatefreq()) {
-    mtx.lock_shared();
+    main_mutex.lock_shared();
     writer.txtwrite_state(logfile);
     simtime_seconds_old = simtime_seconds;
-    mtx.unlock_shared();
+    main_mutex.unlock_shared();
   }
   if (!program_running) {std::terminate();}
 }
