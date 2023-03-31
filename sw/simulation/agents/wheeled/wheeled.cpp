@@ -10,6 +10,7 @@ wheeled::wheeled(int i, vector<float> s, float tstep)
   ID = i;
   dt = tstep;
   orientation = state[STATE_YAW];
+  controller->init(ID);
 }
 
 vector<float> wheeled::state_update(vector<float> state)

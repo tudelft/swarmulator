@@ -5,12 +5,14 @@
 #include <vector>
 #include <mutex>
 #include "randomgenerator.h"
+#include "uwb_channel.h"
 
 class Environment
 {
   std::vector<std::vector<float>> walls;
   random_generator rg;
 public:
+  UltraWidebandChannel uwb_channel;
   std::vector<std::vector<float>> food;
   std::vector<float> beacon;
   float nest;

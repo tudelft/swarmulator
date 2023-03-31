@@ -11,6 +11,7 @@ particle_oriented_xy::particle_oriented_xy(int i, vector<float> s, float tstep)
   dt = tstep;
   orientation = state[STATE_YAW];
   controller->set_saturation(0.5);
+  controller->init(ID);
   manual = false;
 }
 

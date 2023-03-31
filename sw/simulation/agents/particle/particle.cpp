@@ -9,6 +9,7 @@ particle::particle(int i, std::vector<float> s, float tstep)
   dt = tstep;
   orientation = 0.0;
   controller->set_saturation(1.0);
+  controller->init(ID);
 }
 
 std::vector<float> particle::state_update(std::vector<float> s)

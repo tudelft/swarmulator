@@ -16,6 +16,19 @@
  * can be used to animate and visualize the swarm at runtime.
  * It is launched and managed by the animation thread.
  */
+
+struct vertex{
+  float x;
+  float y;
+  float z;
+};
+
+struct color3ub{
+  uint8_t r;
+  uint8_t g;
+  uint8_t b;
+};
+
 class draw
 {
 public:
@@ -60,6 +73,17 @@ public:
   void line(const float &x, const float &y, const float &width);
 
   /**
+   * @brief Draw a colored line with a specified width from (0,0) to (x,y)
+   *
+   * @param x
+   * @param y
+   * @param width
+   * @param color
+   */
+  void line(const float &x, const float &y, const float &width, const color3ub &color);
+
+
+  /**
    * Draw the global x and y axes at (0,0)
    */
   void axes();
@@ -68,6 +92,11 @@ public:
    * Draw a segment (used for walls and obstacles)
    */
   void segment(const float &x0, const float &y0, const float &x1, const float &y1);
+
+  /**
+   * Draw a segment (used for walls and obstacles)
+   */
+  void segment(const float &x0, const float &y0, const float &x1, const float &y1, const color3ub &color);
 
   /**
   * Draw a small white point

@@ -12,12 +12,17 @@
 
 Controller::Controller()
 {
+  this->ID = 0;
   _ddes_x = 1.0; // Desired distance at North
   _ddes_y = 1.0; // Desired distance at East
   _kr = 1.0; // Repulsion gain
   _ka = 0.1; // Attraction gain
   saturation = false; // Controller saturation
 };
+
+void Controller::init(uint16_t ID){
+  this->ID = ID;
+}
 
 void Controller::saturate(float &f)
 {

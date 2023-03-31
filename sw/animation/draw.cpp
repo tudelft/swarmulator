@@ -104,6 +104,19 @@ void draw::line(const float &x, const float &y, const float &width)
   glPopMatrix();
 }
 
+void draw::line(const float &x, const float &y, const float &width, const color3ub &color)
+{
+  glPushMatrix();
+  glLineWidth(width);
+  glColor3ub(color.r, color.g, color.b);
+  glBegin(GL_LINES);
+  glVertex3f(0.0, 0.0, 0.0);
+  glVertex3f(x * xrat, -y * yrat, 0);
+  glEnd();
+  glPopMatrix();
+}
+
+
 void draw::point()
 {
   glPointSize(10.0);
@@ -140,6 +153,16 @@ void draw::segment(const float &x0, const float &y0, const float &x1, const floa
   float lineintensity = 1.0;
   glBegin(GL_LINES);
   glColor3ub(128 * lineintensity, 128 * lineintensity, 128 * lineintensity); // white
+  glVertex3f(x0 * xrat, y0 * yrat, 0.0);
+  glVertex3f(x1 * xrat, y1 * yrat, 0.0);
+  glEnd();
+}
+
+void draw::segment(const float &x0, const float &y0, const float &x1, const float &y1, const color3ub &color)
+{
+  glLineWidth(5);
+  glBegin(GL_LINES);
+  glColor3ub(color.r, color.g, color.b);
   glVertex3f(x0 * xrat, y0 * yrat, 0.0);
   glVertex3f(x1 * xrat, y1 * yrat, 0.0);
   glEnd();

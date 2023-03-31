@@ -140,6 +140,8 @@ void Environment::animate(void)
   for (size_t i = 0; i < food.size(); i++) {
     d.food(food[i][0], food[i][1]);
   }
+
+  this->uwb_channel.animation();
 }
 
 
@@ -171,4 +173,5 @@ void Environment::loop()
 {
   float rate = (0.001 / param->simulation_updatefreq()) * agents.size();
   eat_food(rate);
+  this->uwb_channel.channel_update();
 }

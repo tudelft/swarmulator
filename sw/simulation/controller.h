@@ -16,6 +16,7 @@
 class Controller
 {
 protected:
+  uint16_t ID;
   OmniscientObserver o;
   random_generator rg;
 
@@ -38,6 +39,8 @@ public:
   bool moving; // Internal state of whether the robot is actively moving or not
   bool happy;
   float sensor_range_max;
+
+  virtual void init(const uint16_t ID);
 
   /**
    * Set the speed saturation to true and set the saturation limits.
