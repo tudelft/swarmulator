@@ -17,9 +17,10 @@
 #define NOISE_B 0 // STDEV of noise in bearing, used by omniscient_observer
 
 #define MEAS_NOISE_UWB 0.2   // stdev of measurement noise for TWR, in [m]
+#define MEAS_NOISE_RSSI 1
 #define MEAS_NOISE_RHOX 0.2    // stdev of measurement noise on velocity (x), in [m/s]
 #define MEAS_NOISE_RHOY 0.2    // stdev of measurement noise on velocity (y), in [m/s]
 #define MEAS_NOISE_DPSI 0.1  // stdev of measurement noise on yaw rate in [rad/s]
 
-#define COMMUNICATION_RANGE 10
+#define COMMUNICATION_RANGE 5
 #endif /*SETTINGS_H*/

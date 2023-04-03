@@ -68,6 +68,7 @@ void draw::circle_loop(const float &r)
   int num_segments = 30; // Resolution
   glPushMatrix();
   glLineWidth(1);
+  glColor3ub(64, 64, 64); // gray
   glBegin(GL_LINE_LOOP);
   for (int i = 0; i < num_segments; i++) {
     float theta = 2.0f * M_PI * float(i) / float(num_segments);//get the current angle
@@ -76,6 +77,7 @@ void draw::circle_loop(const float &r)
     glVertex2d(x, y);
   }
   glEnd();
+  
   glColor3ub(255, 255, 255); // White
   glPopMatrix();
 }
@@ -160,7 +162,7 @@ void draw::segment(const float &x0, const float &y0, const float &x1, const floa
 
 void draw::segment(const float &x0, const float &y0, const float &x1, const float &y1, const color3ub &color)
 {
-  glLineWidth(5);
+  glLineWidth(2);
   glBegin(GL_LINES);
   glColor3ub(color.r, color.g, color.b);
   glVertex3f(x0 * xrat, y0 * yrat, 0.0);

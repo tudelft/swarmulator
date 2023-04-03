@@ -12,6 +12,12 @@
 #define UWB_MSG_TYPE_PING 0
 #define UWB_MSG_TYPE_DIST 1
 
+#define RANGING_STATUS_LOST 0
+#define RANGING_STATUS_PASSIVE 1
+#define RANGING_STATUS_ACTIVE 2
+
+#define STATUS_TIMEOUT 20
+
 struct ranging_message {
     uint8_t type;
     uint16_t id_source;
@@ -29,10 +35,12 @@ class UltraWidebandChannel
     random_generator rg;
     float uwb_range;
 private:
-    std::vector<bool> agent_joined;
+    std::vector<uint8_t> agent_joined;
     std::vector<ranging_message> messages;
-    std::vector<std::vector<bool>> in_range;
-    std::vector<std::vector<float>> ranging_matrix; // matrix with ranging measurements
+    std::vector<std::vector<uint8_t>> ranging_status;
+    std::vector<std::vector<uint8_t>> ticks_since_status;
+    std::vector<std::vector<float>> distance_matrix; // matrix with ranging measurements
+    void update_ranging_status(const uint16_t ID_A, const uint16_t ID_B, uint8_t status);
 public:
     UltraWidebandChannel(float comm_range = COMMUNICATION_RANGE);
 
@@ -59,7 +67,7 @@ public:
      * the receiver
      * returns true if at least one message was received.
      */
-    bool receive(const uint16_t receiverID, std::vector<ranging_message> *uwb);
+    bool receive(const uint16_t receiverID, std::vector<ranging_message> *uwb, std::vector<float> *rssi);
     
     /**
      * Receive a vector with all messages that were exchanged on the channel

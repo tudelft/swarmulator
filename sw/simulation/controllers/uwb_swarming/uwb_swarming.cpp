@@ -28,7 +28,7 @@ void uwb_swarming::get_velocity_command(const uint16_t ID, float &v_x, float &ps
   own_input.dPsi = agents[this->ID]->state[STATE_YAWRATE] + this->rg.gaussian_float(0, MEAS_NOISE_DPSI);
 
   this->communicate();
-  this->estimate_rel_pos();
+  // this->estimate_rel_pos();
 
   v_x = 0.5;
   psirate = rg.uniform_float(-M_PI, M_PI);
@@ -38,8 +38,16 @@ void uwb_swarming::get_velocity_command(const uint16_t ID, float &v_x, float &ps
 void uwb_swarming::communicate(){
   environment.uwb_channel.send_ping(this->ID, own_input.rhoX, own_input.rhoY, own_input.dPsi);
 
+  if (this->ID == 0){
+    for (uint i_agent=0; i_agent<this->connectivity_vector.size(); i_agent++){
+      if (this->connectivity_vector[i_agent] != LINK_NONE){
+        environment.uwb_channel.range_to(this->ID, i_agent);
+      }
+    }
+  }
   std::vector<ranging_message> uwb;
-  environment.uwb_channel.receive(this->ID, &uwb);
+  std::vector<float> rssi;
+  environment.uwb_channel.receive(this->ID, &uwb, &rssi);
 
   uint16_t srcID;
   for (uint i=0; i<uwb.size(); i++){
