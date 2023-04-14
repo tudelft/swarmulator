@@ -9,6 +9,7 @@
 #include "main.h"
 #include "drawingparams.h"
 #include "settings.h"
+#include "types.h"
 
 /**
  * @brief Object that takes care of OpenGL drawing for all elements of interest.
@@ -102,6 +103,7 @@ public:
    * @param orientation The orientation of the robot
    */
   void agent(const uint16_t &ID, const float &x, const float &y, const float &orientation);
+  void agent(const uint16_t &ID, const State state);
 
   /**
    * Draw a line showing the velocity of the agent
@@ -113,6 +115,7 @@ public:
    * @param v_y The velocity of the robot in y (global)
    */
   void velocity_arrow(const uint16_t &ID, const float &x, const float &y, const float &v_x, const float &v_y);
+  void velocity_arrow(const uint16_t &ID, const State state);
 
   /**
    * Draw a gray dot indicating food (or something else if you like) at position (x,y)

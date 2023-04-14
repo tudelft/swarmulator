@@ -22,6 +22,8 @@
 #include "fitness_functions.h"
 #include "fifo.h"
 
+#include "types.h"
+
 /**
  * Extract the number of agents from the argument list.
  * Else, return an error.
@@ -59,6 +61,7 @@ void main_simulation_thread(int argc, char *argv[], std::string id)
     float spread = environment.limits(); // Default
     std::vector<float> x0 = rg.uniform_float_vector(nagents, -spread, spread);
     std::vector<float> y0 = rg.uniform_float_vector(nagents, -spread, spread);
+    std::vector<float> z0 = rg.uniform_float_vector(nagents, -spread, spread);
     std::vector<float> t0 = rg.uniform_float_vector(nagents, -M_PI, M_PI);
 
     // Check whether the robot is in the area, else fix.
@@ -73,7 +76,9 @@ void main_simulation_thread(int argc, char *argv[], std::string id)
     while (ID < nagents) {
       bool location_invalid = false;
       for (uint16_t dir = 0; dir < d.size(); dir++) {
-        std::vector<float> s_n = {x0[ID], y0[ID]};
+        // std::vector<float> s_n = {x0[ID], y0[ID]};
+        State s_n;
+        s_n.pos = {x0[ID], y0[ID], z0[ID]};
         if (environment.valid(ID, s_n, d[dir])) {
           location_invalid = true;
           break; // An agent initialized outside of valid area was found. Proceed to fix it.
@@ -84,6 +89,7 @@ void main_simulation_thread(int argc, char *argv[], std::string id)
       if (location_invalid) {
         x0[ID] = rg.uniform_float(-spread, spread);
         y0[ID] = rg.uniform_float(-spread, spread);
+        z0[ID] = rg.uniform_float(-spread, spread);
       } else {
         ID++;
       }
@@ -93,7 +99,12 @@ void main_simulation_thread(int argc, char *argv[], std::string id)
     for (uint16_t ID = 0; ID < nagents; ID++) {
       // Initial state vector
       // [position_x, position y, vel_x=0, vel_y=0, acc_x=0, acc_y=0, psi, psi_rate]
-      std::vector<float> state = {x0[ID], y0[ID], 0.0, 0.0, 0.0, 0.0, t0[ID], 0.0};
+      // std::vector<float> state = {x0[ID], y0[ID], 0.0, 0.0, 0.0, 0.0, t0[ID], 0.0};
+      State state;
+      state.pos = {x0[ID], y0[ID], z0[ID]};
+      state.psi = t0[ID]; 
+      print("gen pos: ", state.pos,"yaw: ", state.psi); //works
+      
       create_new_agent(ID, state); // Create a new agent
     }
   }

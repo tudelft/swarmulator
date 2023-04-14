@@ -23,9 +23,9 @@ void boid::get_velocity_command(const uint16_t ID, float &v_x, float &v_y)
     vector<uint> closest = o.request_closest(ID);
     float avg_psi = 0.;
     for (int i = 0; i < min(int(closest.size()), int(K_NEAREST_BOID)); i++) {
-      avg_psi += s[closest[i]]->state[6] / float(min(int(closest.size()), int(K_NEAREST_BOID)));
+      avg_psi += s[closest[i]]->state.psi / float(min(int(closest.size()), int(K_NEAREST_BOID)));
     }
-    v_y = avg_psi - s[ID]->state[6];
+    v_y = avg_psi - s[ID]->state.psi;
   }
 }
 

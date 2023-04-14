@@ -44,9 +44,11 @@ void main_loop_function()
   if (r > 0) {
     for (uint16_t ID = 0; ID < r; ID++) {
       // Input: ID, p_x global, p_y global, orientation global
-      drawer.agent(ID, s[ID]->state.at(0), s[ID]->state.at(1), s[ID]->orientation);
+      // drawer.agent(ID, s[ID]->state.at(0), s[ID]->state.at(1), s[ID]->orientation);
+      drawer.agent(ID, s[ID]->state);
       // Input: ID, p_x global, p_y global, v_x global, v_y global
-      drawer.velocity_arrow(ID,  s[ID]->state.at(0), s[ID]->state.at(1), s[ID]->state.at(2), s[ID]->state.at(3));
+      // drawer.velocity_arrow(ID,  s[ID]->state.at(0), s[ID]->state.at(1), s[ID]->state.at(2), s[ID]->state.at(3));
+      drawer.velocity_arrow(ID,  s[ID]->state);
     }
   }
 

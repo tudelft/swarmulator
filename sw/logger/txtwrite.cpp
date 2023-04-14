@@ -26,9 +26,11 @@ void txtwrite::txtwrite_state(ofstream &logfile)
   for (uint16_t i = 0; i < s.size(); i++) {
     logfile << t.str() << " " // time
             << i + 1 << " "; // ID
-    for (uint16_t j = 0; j < 2; j++) { // position state 0 and 1
-      logfile << state_buff[i]->state.at(j) << " "; // log states
-    }
+    logfile << state_buff[i]->state.pos[0] << " "; // log states
+    logfile << state_buff[i]->state.pos[1] << " "; // log states
+    // for (uint16_t j = 0; j < 2; j++) { // position state 0 and 1
+    //   logfile << state_buff[i]->state.at(j) << " "; // log states
+    // }
     logfile << f; // fitness
     logfile << endl; // new line
   }

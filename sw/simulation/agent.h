@@ -8,6 +8,7 @@
 
 #include "settings.h"
 #include "terminalinfo.h"
+#include "types.h"
 #include CONTROLLER_INCLUDE
 
 /**
@@ -29,7 +30,7 @@ public:
   uint16_t ID; // ID of agent
   bool activated; // Set true if the agent is active
   float dt;
-  std::vector<float> state; // State vector
+  State state; // State vector
   float orientation; // Orientation
   bool moving;
   float manualx, manualy;
@@ -44,14 +45,16 @@ public:
    * @param dim dimension x or y
    * @return position along x or y
    */
-  float get_position(uint16_t dim);
+  float get_position(uint16_t dim, bool noise = false);
+  float get_velocity(uint16_t dim, bool noise = false);
+  float get_accel(uint16_t dim, bool noise = false);
 
   /**
    * Get the orientation object
    *
    * @return float
    */
-  float get_orientation();
+  float get_orientation(bool noise = false);
 
   /**
    * Get the state along a given dimension
@@ -67,7 +70,8 @@ public:
    * @param s current state vector
    * @return next state vector
    */
-  virtual std::vector<float> state_update(std::vector<float>) = 0;
+  // virtual std::vector<float> state_update(std::vector<float>) = 0;
+  virtual State state_update(State) = 0;
 
   /**
    * The agent class is only the parent class of a child class that specifies the dynamics and control

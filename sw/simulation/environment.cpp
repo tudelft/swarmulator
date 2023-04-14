@@ -9,6 +9,7 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
+#include "types.h"
 
 using namespace std;
 
@@ -85,13 +86,13 @@ void Environment::add_wall(float x0, float y0, float x1, float y1)
   mtx.unlock();
 }
 
-bool Environment::sensor(const uint16_t ID, std::vector<float> s_n, std::vector<float> s, float &angle)
+bool Environment::sensor(const uint16_t ID, State s_n, State s, float &angle)
 {
   Point p1, q1, p2, q2;
-  p1.y = s[0]; // Flip axis
-  p1.x = s[1];
-  q1.y = s_n[0];
-  q1.x = s_n[1];
+  p1.y = s.pos[1]; // Flip axis
+  p1.x = s.pos[0];
+  q1.y = s_n.pos[1];
+  q1.x = s_n.pos[0];
   for (size_t i = 0; i < walls.size(); i++) {
     p2.x = walls[i][0];
     p2.y = walls[i][1];
@@ -105,13 +106,13 @@ bool Environment::sensor(const uint16_t ID, std::vector<float> s_n, std::vector<
   return false;
 }
 
-bool Environment::valid(const uint16_t ID, std::vector<float> s_n, std::vector<float> s)
+bool Environment::valid(const uint16_t ID, State s_n, std::vector<float> s)
 {
   Point p1, q1, p2, q2;
   p1.y = s[0]; // Flip axis
   p1.x = s[1];
-  q1.y = s_n[0];
-  q1.x = s_n[1];
+  q1.y = s_n.pos[1];
+  q1.x = s_n.pos[0];
   uint v = 0;
   for (size_t i = 0; i < walls.size(); i++) {
     p2.x = walls[i][0];

@@ -86,7 +86,11 @@ void keyboard_callback(unsigned char key, __attribute__((unused)) int a, __attri
       if (!paused) {
         terminalinfo::info_msg("Drawing new agent.");
         random_generator rg;
-        std::vector<float> states = {pointer_y, pointer_x, 0.0, 0.0, 0.0, 0.0, rg.uniform_float(-M_PI, M_PI), 0.0}; // Initial positions/states
+        // std::vector<float> states = {pointer_y, pointer_x, 0.0, 0.0, 0.0, 0.0, rg.uniform_float(-M_PI, M_PI), 0.0}; // Initial positions/states
+        State states;
+        states.pos = Vector<float>({pointer_y, pointer_x, 0.0});
+        states.psi = rg.uniform_float(-M_PI, M_PI);
+        
         create_new_agent(s.size(), states);
         break;
       }

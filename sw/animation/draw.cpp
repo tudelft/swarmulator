@@ -155,6 +155,25 @@ void draw::agent(const uint16_t &ID, const float &x, const float &y, const float
   agent_number(ID);
   glPopMatrix();
 }
+void draw::agent(const uint16_t &ID, const State state)
+{
+  glPushMatrix();
+  glTranslatef(state.pos[1] * xrat, state.pos[0] * yrat, 0.0); // ENU to NED
+  glRotatef(90.0 - rad2deg(state.psi), 0.0, 0, 1);
+  s[ID]->animation(); // Uses the animation function defined by the agent in use
+  s[ID]->controller->animation(ID); // Draws additional stuff from the controller, such as sensors
+  agent_number(ID);
+  glPopMatrix();
+}
+
+void draw::velocity_arrow(const uint16_t &ID, const State state)
+{
+  glPushMatrix();
+  glTranslatef(state.pos[1] * xrat, state.pos[0] * yrat, 0.0); // ENU to NED
+  glRotatef(90.0, 0.0, 0.0, 1.0);
+  line(state.vel[0], state.vel[1]);
+  glPopMatrix();
+}
 
 void draw::velocity_arrow(const uint16_t &ID, const float &x, const float &y, const float &v_x, const float &v_y)
 {

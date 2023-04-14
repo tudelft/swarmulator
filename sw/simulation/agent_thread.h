@@ -15,6 +15,8 @@
 #include "terminalinfo.h"
 #include "auxiliary.h"
 
+#include "types.h"
+
 // Include relevant h file for the agent.
 // This path is defined at build time depending on the chosen agent.
 // No need to change this.
@@ -31,8 +33,10 @@ void run_agent_simulation_step(const int &ID)
     bool ready = (s.size() == nagents || simtime_seconds > 0.);
     if (ready) {
       mtx.lock_shared();
-      std::vector<float> s_0 = s.at(ID)->state;
-      std::vector<float> s_n = s.at(ID)->state_update(s_0); // State update
+      State s_0 = s.at(ID)->state;
+      print(s_0);
+      State s_n = s.at(ID)->state_update(s_0); // State update
+      print(s_n);
       mtx.unlock_shared();
 
       /****** Wall physics engine ********/
@@ -40,17 +44,18 @@ void run_agent_simulation_step(const int &ID)
       // The crash into a wall is detected by checking whether the robot is near a wall and the velocity vector intersects with the wall.
 
       // Check if hitting a wall
-      std::vector<float> test = s_n; // Store a copy of the state update
+      State test = s_n; // Store a copy of the state update
       float r_temp, ang_temp, vx_temp, vy_temp;
 
       // Get direction of velocity vector
-      cart2polar(s_n[2], s_n[3], r_temp, ang_temp);
+      // cart2polar(s_n[2], s_n[3], r_temp, ang_temp);
 
       // Detect a potential crash by projecting the position forward based on the velocity, based on a simple test of whether the collision could happen within one second, provided the current velocity is kept.
       // Here we just project the velocity.
-      polar2cart(r_temp, ang_temp, vx_temp, vy_temp);
-      test[0] += vx_temp;
-      test[1] += vy_temp;
+      // polar2cart(r_temp, ang_temp, vx_temp, vy_temp);
+      // test[0] += vx_temp;
+      // test[1] += vy_temp;
+      // test.pos += vel
 
       // Check if hitting the wall.
       // Update or kill the dynamics in case of collision.
@@ -59,15 +64,16 @@ void run_agent_simulation_step(const int &ID)
         // No wall collision --> Update the dynamics
         mtx.lock(); // Sync
         s.at(ID)->state = s_n; // Update
+        // print(s.at(ID)->state);
         mtx.unlock();
       }
 
       else { // Wall! --> Kill the dynamics!
         mtx.lock(); // Sync
-        s.at(ID)->state[2] = 0.0; // v_x = 0
-        s.at(ID)->state[3] = 0.0; // v_y = 0
-        s.at(ID)->state[4] = 0.0; // a_x = 0
-        s.at(ID)->state[5] = 0.0; // a_y = 0
+        s.at(ID)->state.vel[0] = 0.0; // v_x = 0
+        s.at(ID)->state.vel[1] = 0.0; // v_y = 0
+        s.at(ID)->state.acc[0] = 0.0; // a_x = 0
+        s.at(ID)->state.acc[1] = 0.0; // a_y = 0
         s.at(ID)->controller->moving = false; // Not moving
         mtx.unlock();
       }
@@ -97,7 +103,30 @@ void run_agent_simulation_step(const int &ID)
  * @param x Initial position of the agent in x
  * @param y Initial position of the agent in y
  */
-void create_new_agent(const int &ID, const std::vector<float> &states)
+// void create_new_agent(const int &ID, const std::vector<float> &states)
+// {
+//   // Initiate a new agent. The define "AGENT" is defined at build time.
+//   // No need to change this part of the code if you want to use a different agent, just compile swarmulator with:
+//   // >> make AGENT=myawesomeagent
+//   // By default, AGENT=particle
+//   // See wiki for a detailed explanation of how to create your own agent.
+//   mtx.lock();
+//   s.push_back(new AGENT(ID, states, 1.0 / param->simulation_updatefreq()));
+//   mtx.unlock();
+
+//   // Info message
+//   std::stringstream ss;
+//   ss << "Robot " << ID << " initiated";
+//   terminalinfo::info_msg(ss.str());
+
+//   // Initiate the thread that controls the agent
+//   std::thread agent(run_agent_simulation_step, ID);
+
+//   // Detach thread so that it runs independently
+//   agent.detach();
+// }
+
+void create_new_agent(const int &ID, const State &states)
 {
   // Initiate a new agent. The define "AGENT" is defined at build time.
   // No need to change this part of the code if you want to use a different agent, just compile swarmulator with:
@@ -105,7 +134,12 @@ void create_new_agent(const int &ID, const std::vector<float> &states)
   // By default, AGENT=particle
   // See wiki for a detailed explanation of how to create your own agent.
   mtx.lock();
-  s.push_back(new AGENT(ID, states, 1.0 / param->simulation_updatefreq()));
+  auto _agent =  new AGENT(ID, states, 1.0 / param->simulation_updatefreq());
+  print("act pos: ", _agent->state.pos,"yaw: ", _agent->state.psi); //works
+  // print(_agent->state.pos); // doesnt work
+  // print(_agent->orientation); // doesnt work
+
+  s.push_back(_agent);
   mtx.unlock();
 
   // Info message
@@ -119,4 +153,5 @@ void create_new_agent(const int &ID, const std::vector<float> &states)
   // Detach thread so that it runs independently
   agent.detach();
 }
+
 #endif /*AGENT_THREAD_H*/
