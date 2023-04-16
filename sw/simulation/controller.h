@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <stdint.h>
 #include "omniscient_observer.h"
+#include "types.h"
 
 /**
  * This is a parent class for a controller.
@@ -129,6 +130,8 @@ public:
    * @param v_y The desired velocity in v_y (to be set in this function)
    */
   virtual void get_velocity_command(const uint16_t ID, float &v_x, float &v_y) = 0;
+  
+  virtual Vector<float> get_velocity_cmd(const uint16_t ID) = 0;
 
   /**
    * General wall avoidance function to use within get_velocity_command() to instigate a wall avoidance maneuver

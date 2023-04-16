@@ -9,6 +9,8 @@
 
 #include "terminalinfo.h"
 #include "omniscient_observer.h"
+#include <eigen3/unsupported/Eigen/CXX11/Tensor>
+#include <eigen3/Eigen/Dense>
 
 class Template_Calculator
 {
@@ -32,7 +34,10 @@ public:
    * State-action map storage
    */
   std::map<int, std::vector<int>> state_action_matrix;
+  Eigen::Tensor<float, 3> adjacency_mat;
+  Eigen::MatrixXf adjacency_mat_mag;
 
+  void set_adjacency_matrix(std::string filename);
   /**
    * Function to read the state-action map from a txt file and store it in the object
    */

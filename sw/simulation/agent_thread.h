@@ -34,9 +34,9 @@ void run_agent_simulation_step(const int &ID)
     if (ready) {
       mtx.lock_shared();
       State s_0 = s.at(ID)->state;
-      print(s_0);
+      // print(s_0);
       State s_n = s.at(ID)->state_update(s_0); // State update
-      print(s_n);
+      // print(s_n);
       mtx.unlock_shared();
 
       /****** Wall physics engine ********/
