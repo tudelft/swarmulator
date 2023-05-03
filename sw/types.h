@@ -1,10 +1,12 @@
 #ifndef TYPES_H
 #define TYPES_H
+
 #include <iostream>
 #include <iomanip>
 #include <vector>
 #include <functional>
 #include <iterator> 
+#include <cmath>
 #include "utils.h"
 
 template<typename T>
@@ -138,12 +140,42 @@ class Vector{
 	//   };
     };
 
-friend std::ostream& operator<<(std::ostream& os, const Vector& vector){
-	os << " [";
-	for(int i = 0; i < vector.get_len(); i++) os << vector[i] << ", ";
-	os << "] ";
-return os;
-}
+		float mag(){
+			float mag = 0;
+			for(int i = 0; i<_len; i++){
+				mag += pow(_data[i],2);
+			}
+			return sqrt(mag);
+		}		
+
+		// saturation
+		Vector<T> saturate(float max = 6){
+			if (mag()>max){
+				normalise()*max;
+			}
+			return *this;
+		}
+
+		// normalisation
+		Vector<T> normalise(){
+			Vector<T> ret(_len);
+			float mag = this->mag();
+			if (abs(mag-0.0)<0.000001){
+				return *this;
+			}
+			for(int i = 0; i<_len; i++){
+				ret[i] = _data[i]/mag;
+			}
+			return ret;
+		}	
+
+		// help in printing
+		friend std::ostream& operator<<(std::ostream& os, const Vector& vector){
+			os << " [";
+			for(int i = 0; i < vector.get_len(); i++) os << vector[i] << ", ";
+			os << "] ";
+    	return os;
+  	}
 
 	private:
     T* _data;
@@ -162,6 +194,43 @@ return os;
 // 		<< "Ang. Vel.: " << state.omega;
 // 	return os;
 // }
+template<typename T>
+class Matrix{
+	public:
+		int _n_rows, _n_cols;
+		Vector<Vector<T>> _mat;
+
+	public:
+		explicit Matrix(int n_rows, int n_cols): _n_rows(n_rows), _n_cols(n_cols){}
+
+		~Matrix(){
+			_n_rows = 0;
+			_n_cols = 0;
+		}
+
+		// Assignment operator[]
+		T& operator[](const std::pair<int, int>& ij){
+			return _mat[ij];
+		}
+
+		// Access with exception
+		const T& operator()(const std::pair<int, int>& ij) const {
+			return _mat.at(ij);
+		}
+
+		// Vector product
+		template<typename U>
+		const Vector<typename std::common_type<T,U>::type> operator*(const Vector<U> vec){
+
+		}
+
+		// Matrix product
+		template<typename U>
+		const Matrix<typename std::common_type<T,U>::type> operator*(const Matrix<U> vec){
+			Matrix<typename std::common_type<T,U>::type> prod;
+			// for 
+		}
+};
 
 class State{
 	public:

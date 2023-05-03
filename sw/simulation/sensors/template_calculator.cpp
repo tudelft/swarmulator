@@ -2,6 +2,7 @@
 #include "main.h"
 #include "trigonometry.h"
 #include <algorithm> // std::find
+#include <iostream>
 
 using namespace std;
 
@@ -128,5 +129,50 @@ void Template_Calculator::assess_situation(uint16_t ID, vector<bool> &q, vector<
       // Use higher values of bearing sensor to handle higher noise values (even if there is overlap)
       q_ID.push_back(closest[i]); // Log ID (for simulation purposes only, depending on assumptions)
     }
+  }
+}
+
+
+void Template_Calculator::set_adjacency_matrix(std::string filename){
+  std::ifstream formation (filename);
+
+  if (formation.is_open()){
+    std::string mat_size;
+    getline(formation, mat_size);
+    print(mat_size);
+    adjacency_mat = Eigen::Tensor<float, 3>((int)mat_size[0], (int)mat_size[2], mat_size[4]);
+    adjacency_mat.setZero();
+    adjacency_mat_mag = Eigen::MatrixXf((int)mat_size[0], (int)mat_size[2]);
+    adjacency_mat_mag.setZero();
+    
+    int row_id = 0;
+    while (!formation.eof()){
+      std::string row;
+      
+      getline(formation, row);
+      std::stringstream cols(row);
+      int col_id = 0;
+      while (!cols.eof()){
+        
+        std::string val;
+        getline(cols, val, ' ');
+        
+        std::stringstream vals(val);
+        std::string x, y;
+        getline(vals, x, ',');
+        getline(vals, y, ',');
+
+        adjacency_mat(row_id, col_id, 0) = std::stof(x);
+        adjacency_mat(row_id, col_id, 1) = std::stof(y);
+        
+        adjacency_mat_mag(row_id, col_id) = sqrt(pow(std::stof(x), 2) + pow(std::stof(y),2));
+        // print(row_id, col_id, " ",adjacency_mat_mag(row_id, col_id));
+        // std::cout<<row_id;
+        // print(col_id);
+        col_id++;
+        }
+      row_id++;
+    }
+
   }
 }

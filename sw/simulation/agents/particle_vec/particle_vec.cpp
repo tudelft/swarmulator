@@ -19,8 +19,9 @@ State particle_vec::state_update(State state)
   // NED frame
   // x+ towards North
   // y+ towards East
-  Vector<float> v_des = Vector<float>({1.,1.,1.});
-  state.acc = v_des - state.vel; 
+  Vector<float> v_des = controller->get_velocity_cmd(ID);
+  state.acc = (v_des - state.vel); 
+  
   state.vel += state.acc * dt;
   state.pos += state.vel * dt * 0.5 + state.acc * pow(dt, 2); 
   return state;

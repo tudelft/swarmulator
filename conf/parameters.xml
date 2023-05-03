@@ -20,7 +20,7 @@
   <!-- Logger -->
   <logger_updatefreq>2</logger_updatefreq>
   <!-- Additional parameters -->
-  <policy></policy>
+  <policy>conf/formations/formation.csv</policy>
   <fitness>aggregation_clusters</fitness>
   <!--new_parameter_name>default value</new_parameter_name-->
 </parameters>
