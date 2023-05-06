@@ -2,6 +2,9 @@
 #include "main.h"
 #include <vector>
 #include "draw.h"
+// #include "multiranger.h"
+#include "types.h"
+#include "math.h"
 
 #define SENSORS 8
 #define SENSOR_MAX_RANGE 1.8
@@ -16,12 +19,18 @@ formation::formation(): t(SENSORS, SENSOR_MAX_RANGE){
     sensor_range = SENSOR_MAX_RANGE;
     min_sep = 20;
     print("\n",t.adjacency_mat_mag(1,0));
+    float theta = M_PI/2; 
+    // ranger = Ranger(Pose({2, 0, 0}, {1, 0, 0, 1}));
+    multi_ranger = MultiRanger();
 }
 
 void formation::animation(const uint16_t ID)
 {
   draw d;
   d.circle_loop(sensor_range);
+
+  // sensor animations
+  multi_ranger.animate(d);
 }
 
 void formation::get_velocity_command(const uint16_t ID, float &v_x, float &v_y){}

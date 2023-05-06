@@ -5,6 +5,8 @@
 #include "eigen3/Eigen/Dense"
 #include "template_calculator.h"
 #include "types.h"
+#include "multiranger.h"
+#include "ranger.h"
 #include <string>
 
 class formation: public Controller{
@@ -12,6 +14,8 @@ class formation: public Controller{
         formation();
         ~formation(){};
         Template_Calculator t;
+        MultiRanger multi_ranger;
+        Ranger ranger;
         float sensor_range;
         float min_sep;
 

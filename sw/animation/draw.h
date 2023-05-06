@@ -28,7 +28,9 @@ public:
    * @param s Scale of the triangle
    */
   void triangle(const float &s);
+  void triangle(const Eigen::MatrixXf points, const float scl);
 
+  void rect(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const Eigen::Vector3f &p3, const Eigen::Vector3f &p4, const float &width =1, const Vector<float> color = {255,255,255});
   /**
    * Draw a red circle of radius r
    *
@@ -59,7 +61,10 @@ public:
    * @param width
    */
   void line(const float &x, const float &y, const float &width);
+  void line(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const float &width =1, const Vector<float> color = {255,255,255});
 
+
+  void polyline(const Eigen::MatrixXf &points, const float &width, const Vector<float> color);
   /**
    * Draw the global x and y axes at (0,0)
    */

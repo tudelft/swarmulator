@@ -8,6 +8,9 @@
 #include <iterator> 
 #include <cmath>
 #include "utils.h"
+#include <eigen3/Eigen/Dense>
+#include <eigen3/Eigen/Eigenvalues>
+#include "math.h"
 
 template<typename T>
 class Vector{
@@ -72,6 +75,8 @@ class Vector{
 		// getters
 		int get_len() const {return _len;}
 		T* get_data() const {return _data;}
+		T begin(){return _data[0];}
+		T end(){return _data[0+_len];}
 
 		// setters
 		void set_len(int len){_len = len;}
@@ -168,6 +173,10 @@ class Vector{
 			}
 			return ret;
 		}	
+		
+		Eigen::Matrix<T, -1, 1> toEigen(){
+			return Eigen::Map<Eigen::Matrix<T, -1, 1>>(_data, _len);
+		};
 
 		// help in printing
 		friend std::ostream& operator<<(std::ostream& os, const Vector& vector){
@@ -258,7 +267,7 @@ class State{
 class Pose{
 	public:
 		Pose():_pos({0., 0., 0.}), _quat({0., 0., 0., 0.,}){};
-		Pose(Vector<float>pos, Vector<float> quat):_pos(pos), _quat(quat){};
+		Pose(Vector<float>pos, Vector<float> quat):_pos(pos), _quat(quat.normalise()){};
 
 		Pose operator*(const Pose& other){
 			Pose ret;
@@ -275,6 +284,17 @@ class Pose{
  
 			return ret;
 		}
+		
+		// // Transform a vector using this pose
+		// Vector<float> operator*(const Vector<float>& vec){
+
+		// }
+
+		Eigen::MatrixXf transform(Eigen::MatrixXf vecs){
+			return (vecs * this->toRotMat()).rowwise() + _pos.toEigen().transpose();
+		}
+
+
 
 		Vector<float> getPos() const {return _pos;}
 		void setPos(Vector<float> pos){_pos = pos;}
@@ -283,6 +303,51 @@ class Pose{
 		Vector<float> getQuat(const int dim) const {return _quat[dim];}
 		void setQuat(Vector<float> quat){_quat = quat;}
 		void setQuat(int dim, float element){_quat[dim] = element;}
+
+		Eigen::MatrixXf toTransMat() {
+			float q0 = _quat[0];
+			float q1 = _quat[1];
+			float q2 = _quat[2];
+			float q3 = _quat[3];
+			return Eigen::Matrix<float, 3, 4>{
+				{2*(powf(q0,2) + powf(q1,2))-1 ,2*(q1*q2 - q0*q3)			  ,2*(q1*q3 + q0*q2)			 ,_pos[0]},
+				{2*(q1*q2 + q0*q3)			   ,2*(powf(q0,2) + powf(q2,2))-1 ,2*(q2*q3 - q0*q1)			 ,_pos[1]},
+				{2*(q1*q3 - q0*q2)			   ,2*(q2*q3 + q0*q1)			  ,2*(powf(q0,2) + powf(q3,2))-1 ,_pos[2]},
+			};
+		}
+
+		Eigen::Matrix3f toRotMat() {
+			float q0 = _quat[0];
+			float q1 = _quat[1];
+			float q2 = _quat[2];
+			float q3 = _quat[3];
+			return Eigen::Matrix3f{
+				{2*(powf(q0,2) + powf(q1,2))-1 ,2*(q1*q2 - q0*q3)			  ,2*(q1*q3 + q0*q2)			},
+				{2*(q1*q2 + q0*q3)			   ,2*(powf(q0,2) + powf(q2,2))-1 ,2*(q2*q3 - q0*q1)			},
+				{2*(q1*q3 - q0*q2)			   ,2*(q2*q3 + q0*q1)			  ,2*(powf(q0,2) + powf(q3,2))-1},
+			};
+		}
+
+		// static Pose fromTransMat(Eigen::MatrixXf mat){
+		// 	float q0 = sqrt(1.0 + ) / 2.0;
+		// 	float w4 = (4.0 * q0);
+		// 	float q1 = (mat(2,1) - mat(1,2)) / w4 ;
+		// 	float q2 = (mat(0,2) - mat(2,0)) / w4 ;
+		// 	float q3 = (mat(1,0) - mat(0,1)) / w4 ;
+			
+		// 	// method2
+		// 	Eigen::EigenSolver<Eigen::MatrixXf> eigensolver(mat);
+		// 	// eigensolver.compute(mat);
+		// 	theta = std::acos(mat(0,0) + mat(1,1) + mat(2,2) - 1)/2);
+		// 	e1 = eigensolver.eigenvectors().col(0);
+			
+		// 	q0 = std::cos(theta/2);
+		// 	q1 = 
+
+		// 	return Pose({mat(0,3), mat(1,3), mat(2,3)}, {q0,q1,q2,q3});
+
+		// } 
+
 
 	private:
 		Vector<float> _pos = {0., 0., 0.}; // x, y, z

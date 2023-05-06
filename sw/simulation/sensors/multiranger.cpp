@@ -1,6 +1,7 @@
 #include "multiranger.h"
 #include "ranger.h"
 #include "math.h"
+#include "draw.h"
 
 MultiRanger::MultiRanger(){
     float theta = M_PI/2; 
@@ -17,4 +18,10 @@ Vector<float> MultiRanger::getMeasurements(Pose pose){
         _measurements[i] = _rangers[i].getMeasurement(pose);
     }
     return _measurements;
+}
+
+void MultiRanger::animate(draw d){
+    for (int i=0; i<_rangers.get_len(); i++){
+        _rangers[i].animate(d);
+    }
 }

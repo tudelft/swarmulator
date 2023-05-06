@@ -2,6 +2,7 @@
 #include "trigonometry.h"
 #include <cmath>
 #include "fitness_functions.h"
+#include "eigen3/Eigen/Dense"
 
 void draw::data()
 {
@@ -39,6 +40,36 @@ void draw::triangle(const float &scl)
   glVertex2f(-1 * scl,  1 * scl);
   glVertex2f(-1 * scl, -1 * scl);
   glVertex2f(2.0 * scl,  0 * scl);
+  glEnd();
+
+  glColor3ub(255, 255, 255); // White
+  glPopMatrix();
+}
+
+void draw::triangle(const Eigen::MatrixXf points, const float scl=0.0)
+{
+  glPushMatrix();
+
+  glBegin(GL_POLYGON);
+  glColor3ub(200, 000, 000); // Red
+
+  // sensing plane made by 4 points
+  glVertex3f(points(0,0) * scl, points(0,1) * scl, points(0,2) * scl); // top left
+  glVertex3f(points(4,0) * scl, points(4,1) * scl, points(4,2) * scl); // apex of sensor
+  glColor3ub(255, 255, 255); // White
+  glVertex3f(points(1,0) * scl, points(1,1) * scl, points(1,2) * scl); // top right
+
+  glColor3ub(255, 255, 255); // White
+  // glVertex3f(points(3,0) * scl, points(3,1) * scl, points(3,2) * scl); // bottom left
+  // glVertex3f(points(4,0) * scl, points(4,1) * scl, points(4,2) * scl); // apex of sensor
+  // glVertex3f(points(2,0) * scl, points(2,1) * scl, points(2,2) * scl); // bottom right
+
+
+  // glVertex3f(points(4,0) * scl, points(4,1) * scl, points(4,2) * scl); // apex of sensor
+  
+
+  // apex of sensor
+  // glVertex3f(points(4,0) * scl, points(4,1) * scl, points(4,2) * scl);
   glEnd();
 
   glColor3ub(255, 255, 255); // White
@@ -104,6 +135,48 @@ void draw::line(const float &x, const float &y, const float &width)
   glPopMatrix();
 }
 
+void draw::line(const Eigen::Vector3f &p1, const Eigen::Vector3f& p2, const float &width, const Vector<float> color)
+{
+  glPushMatrix();
+  glLineWidth(width);
+  glColor3f(color[0], color[1], color[2]);
+  glBegin(GL_LINES);
+  glVertex3f(p1[0], p1[1], p1[2]);
+  glVertex3f(p2[0], p2[1], p2[2]);
+  glEnd();
+  glPopMatrix();
+}
+
+void draw::rect(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const Eigen::Vector3f &p3, const Eigen::Vector3f &p4, const float &width, const Vector<float> color){
+    glPushMatrix();
+    glLineWidth(width);
+    glColor3f(color[0], color[1], color[2]);
+    glBegin(GL_LINE_STRIP);
+    glVertex3f(p1[0], p1[1], p1[2]);
+    glVertex3f(p2[0], p2[1], p2[2]);
+    glVertex3f(p3[0], p3[1], p3[2]);
+    glVertex3f(p4[0], p4[1], p4[2]);
+    glVertex3f(p1[0], p1[1], p1[2]);
+    glEnd();
+    glPopMatrix();
+
+}
+
+
+void draw::polyline(const Eigen::MatrixXf &points, const float &width = 1, const Vector<float> color = {255,255,255})
+{
+  glPushMatrix();
+  glLineWidth(width);
+  glColor3f(color[0], color[1], color[2]);
+  for (int i=0; i < points.rows(); i++){
+    glBegin(GL_LINES);
+    glVertex3f(points(i,0), points(i,0), points(i,2));
+    glVertex3f(points(i+1,0), points(i+1,1), points(i+1,2));
+    glEnd();
+  }
+  glPopMatrix();
+}
+
 void draw::point()
 {
   glPointSize(10.0);
@@ -149,7 +222,7 @@ void draw::agent(const uint16_t &ID, const float &x, const float &y, const float
 {
   glPushMatrix();
   glTranslatef(y * xrat, x * yrat, 0.0); // ENU to NED
-  glRotatef(90.0 - rad2deg(orientation), 0.0, 0, 1);
+  glRotatef(90.0 - rad2deg(orientation), 0.0, 0, 1); // This brings the reference frame to the body frame 
   s[ID]->animation(); // Uses the animation function defined by the agent in use
   s[ID]->controller->animation(ID); // Draws additional stuff from the controller, such as sensors
   agent_number(ID);
