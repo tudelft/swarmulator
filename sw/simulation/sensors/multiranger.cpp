@@ -14,9 +14,10 @@ MultiRanger::MultiRanger(){
 
 }
 
-Vector<float> MultiRanger::getMeasurements(Pose pose){
+std::vector<float> MultiRanger::getMeasurements(Pose pose){
+    _measurements.clear();
     for (int i=0; i<_rangers.get_len(); i++){
-        _rangers[i].getMeasurement(pose);
+        _measurements.push_back( _rangers[i].getMeasurement(pose));
     }
     // return Vector<float>({1});
     return _measurements;

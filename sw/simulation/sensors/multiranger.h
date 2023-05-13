@@ -9,7 +9,7 @@
 class MultiRanger{
     public:
         MultiRanger();
-        Vector<float> getMeasurements(Pose pose);
+        std::vector<float> getMeasurements(Pose pose);
         void animate(draw d);
 
     private:
@@ -17,7 +17,7 @@ class MultiRanger{
         float _ranger_dist = 2.0; // cm
         enum {FRONT, LEFT, RIGHT, BACK, BOTTOM};
         Vector<Ranger> _rangers = Vector<Ranger>(5);
-        Vector<float> _measurements;
+        std::vector<float> _measurements;
 
 
 };

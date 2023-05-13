@@ -84,7 +84,7 @@ Eigen::Vector3f formation::get_velocity_cmd(const uint16_t ID){
  
     // formation
     // ranger.getMeasurement(s[ID]->state.pose);
-    multi_ranger.getMeasurements(s[ID]->state.pose);
+    std::vector<float> ranges = multi_ranger.getMeasurements(s[ID]->state.pose);
 
     return v_des.normalized()*3;
 }

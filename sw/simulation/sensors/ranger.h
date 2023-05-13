@@ -12,6 +12,7 @@ class Ranger{
         float _range = 10; // cm
         float _fov = 25*M_PI/180; // degrees
         std::vector<Eigen::Vector3f> intersections;
+        Eigen::Vector3f intersection;
         
         // Vector<Vector<float>> sensor_draw ={Vector<float>({}), Vector<float>({}), Vector<float>({})};
         Eigen::Matrix<float, 5, 3> _lasers = Eigen::Matrix<float, 5, 3>(); // generic laser template
@@ -43,7 +44,7 @@ class Ranger{
         pose is defined with respect to map origin
         */
         
-        std::vector<Eigen::Vector3f>  getMeasurement(Pose parent_pose);
+        float getMeasurement(Pose parent_pose);
 
         void animate(draw d);
         
