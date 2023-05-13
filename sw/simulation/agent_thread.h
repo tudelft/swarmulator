@@ -135,9 +135,6 @@ void create_new_agent(const int &ID, const State &states)
   // See wiki for a detailed explanation of how to create your own agent.
   mtx.lock();
   auto _agent =  new AGENT(ID, states, 1.0 / param->simulation_updatefreq());
-  print("act pos: ", _agent->state.pos,"yaw: ", _agent->state.psi); //works
-  // print(_agent->state.pos); // doesnt work
-  // print(_agent->orientation); // doesnt work
 
   s.push_back(_agent);
   mtx.unlock();

@@ -37,6 +37,7 @@ void draw::triangle(const float &scl)
 
   glBegin(GL_POLYGON);
   glColor3ub(200, 000, 000); // Red
+
   glVertex2f(-1 * scl,  1 * scl);
   glVertex2f(-1 * scl, -1 * scl);
   glVertex2f(2.0 * scl,  0 * scl);
@@ -46,20 +47,19 @@ void draw::triangle(const float &scl)
   glPopMatrix();
 }
 
-void draw::triangle(const Eigen::MatrixXf points, const float scl=0.0)
+void draw::triangle(const Eigen::MatrixXf points, const float scl)
 {
   glPushMatrix();
 
   glBegin(GL_POLYGON);
   glColor3ub(200, 000, 000); // Red
 
-  // sensing plane made by 4 points
   glVertex3f(points(0,0) * scl, points(0,1) * scl, points(0,2) * scl); // top left
-  glVertex3f(points(4,0) * scl, points(4,1) * scl, points(4,2) * scl); // apex of sensor
-  glColor3ub(255, 255, 255); // White
-  glVertex3f(points(1,0) * scl, points(1,1) * scl, points(1,2) * scl); // top right
+  glVertex3f(points(1,0) * scl, points(1,1) * scl, points(1,2) * scl); // apex of sensor
+  // glColor3ub(255, 255, 255); // White
+  glVertex3f(points(2,0) * scl, points(2,1) * scl, points(2,2) * scl); // top right
 
-  glColor3ub(255, 255, 255); // White
+  // glColor3ub(255, 255, 255); // White
   // glVertex3f(points(3,0) * scl, points(3,1) * scl, points(3,2) * scl); // bottom left
   // glVertex3f(points(4,0) * scl, points(4,1) * scl, points(4,2) * scl); // apex of sensor
   // glVertex3f(points(2,0) * scl, points(2,1) * scl, points(2,2) * scl); // bottom right
@@ -162,19 +162,46 @@ void draw::rect(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const Eige
 
 }
 
+void draw::polygon(const Eigen::MatrixXf &points, const float &width, const Vector<float> color){
+    glPushMatrix();
+    glBegin(GL_POLYGON);
+    glColor4f(color[0], color[1], color[2], color[3]); // Redish
+    for (int i = 0; i < points.rows(); i++) { // Resolution
+      glVertex3f(points(i,0),points(i,1),points(i,2));
+    }
+    // glVertex3f(points(0,0),points(0,1),points(0,2)); // to close the polygon
+    glEnd();
 
-void draw::polyline(const Eigen::MatrixXf &points, const float &width = 1, const Vector<float> color = {255,255,255})
+    glColor3ub(255, 255, 255); // White
+    glPopMatrix();
+}
+
+void draw::polyline(const Eigen::MatrixXf &points, const float &width, const Vector<float> color)
 {
   glPushMatrix();
   glLineWidth(width);
   glColor3f(color[0], color[1], color[2]);
-  for (int i=0; i < points.rows(); i++){
+  int l = points.rows();
+  for (int i=0; i < l; i++){
     glBegin(GL_LINES);
-    glVertex3f(points(i,0), points(i,0), points(i,2));
-    glVertex3f(points(i+1,0), points(i+1,1), points(i+1,2));
+    glVertex3f(points(i%l,0), points(i%l,1), points(i%l,2));
+    glVertex3f(points((i+1)%l,0), points((i+1)%l,1), points((i+1)%l,2));
+    // glVertex3f(0, 0, 0);
+    // glVertex3f(1, 1, 5);
+    
     glEnd();
   }
   glPopMatrix();
+}
+
+void draw::points(Eigen::MatrixXf p, Vector<float> color){
+  glPointSize(10.0);
+  glColor4f(color[0], color[1], color[2], color[3]);
+  glBegin(GL_POINTS);
+  for (int i=0; i < p.rows(); i++){
+    glVertex3f(p(i,0), p(i,1), p(i,2));
+  }
+  glEnd();
 }
 
 void draw::point()
@@ -221,8 +248,8 @@ void draw::segment(const float &x0, const float &y0, const float &x1, const floa
 void draw::agent(const uint16_t &ID, const float &x, const float &y, const float &orientation)
 {
   glPushMatrix();
-  glTranslatef(y * xrat, x * yrat, 0.0); // ENU to NED
-  glRotatef(90.0 - rad2deg(orientation), 0.0, 0, 1); // This brings the reference frame to the body frame 
+  glTranslatef(x * xrat, y * yrat, 0.0); // ENU to NED
+  glRotatef(rad2deg(orientation), 0.0, 0, 1); // This brings the reference frame to the body frame 
   s[ID]->animation(); // Uses the animation function defined by the agent in use
   s[ID]->controller->animation(ID); // Draws additional stuff from the controller, such as sensors
   agent_number(ID);
@@ -231,8 +258,8 @@ void draw::agent(const uint16_t &ID, const float &x, const float &y, const float
 void draw::agent(const uint16_t &ID, const State state)
 {
   glPushMatrix();
-  glTranslatef(state.pos[1] * xrat, state.pos[0] * yrat, 0.0); // ENU to NED
-  glRotatef(90.0 - rad2deg(state.psi), 0.0, 0, 1);
+  glTranslatef(state.pose.pos[0] * xrat, state.pose.pos[1] * yrat, 0.0); // ENU to NED
+  glRotatef(rad2deg(state.pose.toEuler()[2]), 0.0, 0, 1);
   s[ID]->animation(); // Uses the animation function defined by the agent in use
   s[ID]->controller->animation(ID); // Draws additional stuff from the controller, such as sensors
   agent_number(ID);
@@ -242,8 +269,8 @@ void draw::agent(const uint16_t &ID, const State state)
 void draw::velocity_arrow(const uint16_t &ID, const State state)
 {
   glPushMatrix();
-  glTranslatef(state.pos[1] * xrat, state.pos[0] * yrat, 0.0); // ENU to NED
-  glRotatef(90.0, 0.0, 0.0, 1.0);
+  glTranslatef(state.pose.pos[0] * xrat, state.pose.pos[1] * yrat, 0.0); // ENU to NED
+  glRotatef(0.0, 0.0, 0.0, 1.0);
   line(state.vel[0], state.vel[1]);
   glPopMatrix();
 }
@@ -251,16 +278,25 @@ void draw::velocity_arrow(const uint16_t &ID, const State state)
 void draw::velocity_arrow(const uint16_t &ID, const float &x, const float &y, const float &v_x, const float &v_y)
 {
   glPushMatrix();
-  glTranslatef(y * xrat, x * yrat, 0.0); // ENU to NED
-  glRotatef(90.0, 0.0, 0.0, 1.0);
+  glTranslatef(x * xrat, y * yrat, 0.0); // ENU to NED
+  glRotatef(0.0, 0.0, 0.0, 1.0);
   line(v_x, v_y);
+  glPopMatrix();
+}
+
+void draw::sphere(const Eigen::Vector3f pos, Eigen::Vector4f axis_angle, float radius){
+  glPushMatrix();
+  glTranslatef(pos[0], pos[1], pos[2]); // ENU to NED
+  glRotatef(axis_angle[0], axis_angle[1], axis_angle[2], axis_angle[3]);
+  // line(v_x, v_y);
+  glutWireSphere(radius,1,1);
   glPopMatrix();
 }
 
 void draw::food(const float &x, const float &y)
 {
   glPushMatrix();
-  glTranslatef(y * xrat, x * yrat, 0.0);
+  glTranslatef(x * xrat, y * yrat, 0.0);
   glRotatef(90, 0.0, 0.0, 1.0);
   point();
   glPopMatrix();

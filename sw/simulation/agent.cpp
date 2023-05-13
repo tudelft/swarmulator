@@ -7,8 +7,8 @@ Agent::Agent()
 
 float Agent::get_position(uint16_t dim, bool noise)
 {
-  if (noise) return state.pos[dim] + rg.gaussian_float(0.0, NOISE_R);
-  else return state.pos[dim];
+  if (noise) return state.pose.pos[dim] + rg.gaussian_float(0.0, NOISE_R);
+  else return state.pose.pos[dim];
 }
 
 float Agent::get_velocity(uint16_t dim, bool noise)

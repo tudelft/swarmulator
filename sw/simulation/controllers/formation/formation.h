@@ -23,9 +23,9 @@ class formation: public Controller{
         virtual void get_velocity_command(const uint16_t ID, float &v_x, float &v_y);
         virtual void animation(const uint16_t ID);
         
-        template<typename T>
-        Vector<T> calc_consensus_vel(Vector<T> pos_t, Vector<T> pos_c, double gain, float d_t, float d_c, std::string type ="");
-        Vector<float> get_velocity_cmd(const uint16_t ID);
+        
+        Eigen::Vector3f calc_consensus_vel(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_t, float d_c, std::string type ="");
+        Eigen::Vector3f get_velocity_cmd(const uint16_t ID);
 };
 
 #endif

@@ -105,8 +105,8 @@ bool Controller::wall_avoidance_bounce(const uint16_t ID, float &v_x, float &v_y
   float r_temp, ang_temp, vx_temp, vy_temp;
   cart2polar(v_x, v_y, r_temp, ang_temp); // direction of velocity
   polar2cart(rangesensor, ang_temp, vx_temp, vy_temp); // use rangesensor to sense walls
-  sn.pos[0] += vx_temp;
-  sn.pos[1] += vy_temp;
+  sn.pose.pos[0] += vx_temp;
+  sn.pose.pos[1] += vy_temp;
   float slope;
   bool test = environment.sensor(ID, sn, s[ID]->state, slope);
   if (test) {
@@ -128,16 +128,16 @@ bool Controller::wall_avoidance_turn(const uint16_t ID, float &v, float &dpsithe
   rotate_xy(0.5, 0.5, sn.psi, vx_global, vy_global);
   cart2polar(vx_global, vy_global, r_temp, ang_temp); // direction of velocity
   polar2cart(rangesensor, ang_temp, vx_temp, vy_temp); // use rangesensor to sense walls
-  sn.pos[0] += vx_temp;
-  sn.pos[1] += vy_temp;
+  sn.pose.pos[0] += vx_temp;
+  sn.pose.pos[1] += vy_temp;
   bool test1 = environment.sensor(ID, sn, s[ID]->state, slope);
 
   sn = s[ID]->state;
   rotate_xy(0.5, -0.5, sn.psi, vx_global, vy_global);
   cart2polar(vx_global, vy_global, r_temp, ang_temp); // direction of velocity
   polar2cart(rangesensor, ang_temp, vx_temp, vy_temp); // use rangesensor to sense walls
-  sn.pos[0] += vx_temp;
-  sn.pos[1] += vy_temp;
+  sn.pose.pos[0] += vx_temp;
+  sn.pose.pos[1] += vy_temp;
 
   bool test2 = environment.sensor(ID, sn, s[ID]->state, slope);
   if (test1 || test2) {

@@ -28,7 +28,7 @@ public:
    * @param s Scale of the triangle
    */
   void triangle(const float &s);
-  void triangle(const Eigen::MatrixXf points, const float scl);
+  void triangle(const Eigen::MatrixXf points, const float scl=1.0);
 
   void rect(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const Eigen::Vector3f &p3, const Eigen::Vector3f &p4, const float &width =1, const Vector<float> color = {255,255,255});
   /**
@@ -64,7 +64,10 @@ public:
   void line(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const float &width =1, const Vector<float> color = {255,255,255});
 
 
-  void polyline(const Eigen::MatrixXf &points, const float &width, const Vector<float> color);
+  void polyline(const Eigen::MatrixXf &points, const float &width=1, const Vector<float> color= {1,1,1,1});
+  
+  
+  void polygon(const Eigen::MatrixXf &points, const float &width=1, const Vector<float> color= {1,1,1,1});
   /**
    * Draw the global x and y axes at (0,0)
    */
@@ -79,6 +82,7 @@ public:
   * Draw a small white point
   */
   void point();
+  void points(Eigen::MatrixXf p, Vector<float> color = {1,0,0,0});
 
   /**
    * Draw relevant simulation data in the bottom left corner (like the time of simulation)
@@ -129,6 +133,7 @@ public:
    * @param y The y position of the food
    */
   void food(const float &x, const float &y);
+  void sphere(const Eigen::Vector3f pos, Eigen::Vector4f axis_angle, float radius);
 };
 
 #endif /*DRAW_H*/

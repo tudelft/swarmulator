@@ -139,7 +139,7 @@ void Template_Calculator::set_adjacency_matrix(std::string filename){
   if (formation.is_open()){
     std::string mat_size;
     getline(formation, mat_size);
-    print(mat_size);
+    // print(mat_size);
     adjacency_mat = Eigen::Tensor<float, 3>((int)mat_size[0], (int)mat_size[2], mat_size[4]);
     adjacency_mat.setZero();
     adjacency_mat_mag = Eigen::MatrixXf((int)mat_size[0], (int)mat_size[2]);

@@ -4,10 +4,11 @@
 #include "agent.h"
 #include <vector>
 #include "types.h"
-
+#include "main.h"
 /*
 A particle that uses vectorised calculations. Allows extension to 3D
 */
+// std::unique_ptr param;
 
 class particle_vec: public Agent{
   public:
@@ -26,6 +27,7 @@ class particle_vec: public Agent{
      * Animation openGL implementation for visualization
      */
     void animation();
+    Eigen::MatrixXf tri_pts = param->scale()*Eigen::MatrixXf({{2,0,0}, {-1,1,0},{-1,-1,0}}); 
 };
 
 #endif

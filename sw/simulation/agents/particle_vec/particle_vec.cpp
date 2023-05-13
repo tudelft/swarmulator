@@ -19,11 +19,11 @@ State particle_vec::state_update(State state)
   // NED frame
   // x+ towards North
   // y+ towards East
-  Vector<float> v_des = controller->get_velocity_cmd(ID);
+  Eigen::Vector3f v_des = controller->get_velocity_cmd(ID);
   state.acc = (v_des - state.vel); 
-  
+  // print(state.pose.pos, "\n");
   state.vel += state.acc * dt;
-  state.pos += state.vel * dt * 0.5 + state.acc * pow(dt, 2); 
+  state.pose.pos += state.vel * dt * 0.5 + state.acc * pow(dt, 2); 
   return state;
 // //   float vx_des, vy_des = 0.;
 
@@ -35,7 +35,7 @@ State particle_vec::state_update(State state)
 // //     vx_des = manualx;
 // //     vy_des = manualy;
 // //     dpsirate = manualpsi_delta;
-// //   }
+// //   }t> z0 = r
 // //   controller->saturate(vx_des);
 // //   controller->saturate(vy_des);
 // // #if COMMAND_LOCAL
@@ -68,7 +68,7 @@ State particle_vec::state_update(State state)
 
 void particle_vec::animation()
 {
-  draw d;
-
+  draw d;   
+  // d.triangle(state.pose.transform(tri_pts));
   d.triangle(param->scale());
 }

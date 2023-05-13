@@ -5,18 +5,21 @@
 #include <vector>
 #include <mutex>
 #include "randomgenerator.h"
-
+#include "obstacles.h"
 #include "types.h"
 
 class Environment
 {
   std::vector<std::vector<float>> walls;
+  // Eigen::VectorX<Eigen::MatrixXf> walls;
   random_generator rg;
 public:
   std::vector<std::vector<float>> food;
   std::vector<float> beacon;
   float nest;
-
+  // Cuboid* arena;
+  // Cuboid* obstacle;
+  std::vector<ObstacleBase*> obstacles;
   /**
   * @brief Construct a new Environment object
   *

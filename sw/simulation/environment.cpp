@@ -15,6 +15,9 @@ using namespace std;
 
 Environment::Environment(void)
 {
+  obstacles.push_back(new Cuboid({1,2,3}, Pose({3,4,0}, {1,0,0,0})));
+  obstacles.push_back(new Cuboid({20,20,20},Pose({0,0,0}, {1,0,0,0})));
+  // print(obstacle->get_primitives()[0]->_points_t);
   define_walls();
   if (!strcmp(param->fitness().c_str(), "food")) {
     mtx_env.lock();
@@ -35,7 +38,11 @@ void Environment::define_walls(void)
   }
   string filename = "conf/environments/" + param->environment() + ".txt";
   walls = read_matrix(filename);
+  
+  
 }
+
+
 
 void Environment::define_food(uint64_t n)
 {
@@ -89,10 +96,10 @@ void Environment::add_wall(float x0, float y0, float x1, float y1)
 bool Environment::sensor(const uint16_t ID, State s_n, State s, float &angle)
 {
   Point p1, q1, p2, q2;
-  p1.y = s.pos[1]; // Flip axis
-  p1.x = s.pos[0];
-  q1.y = s_n.pos[1];
-  q1.x = s_n.pos[0];
+  p1.y = s.pose.pos[1]; // Flip axis
+  p1.x = s.pose.pos[0];
+  q1.y = s_n.pose.pos[1];
+  q1.x = s_n.pose.pos[0];
   for (size_t i = 0; i < walls.size(); i++) {
     p2.x = walls[i][0];
     p2.y = walls[i][1];
@@ -111,8 +118,8 @@ bool Environment::valid(const uint16_t ID, State s_n, std::vector<float> s)
   Point p1, q1, p2, q2;
   p1.y = s[0]; // Flip axis
   p1.x = s[1];
-  q1.y = s_n.pos[1];
-  q1.x = s_n.pos[0];
+  q1.y = s_n.pose.pos[1];
+  q1.x = s_n.pose.pos[0];
   uint v = 0;
   for (size_t i = 0; i < walls.size(); i++) {
     p2.x = walls[i][0];
@@ -140,6 +147,9 @@ void Environment::animate(void)
 
   for (size_t i = 0; i < food.size(); i++) {
     d.food(food[i][0], food[i][1]);
+  }
+  for (ObstacleBase* obstacle: obstacles){
+    obstacle->animate(d);
   }
 }
 
