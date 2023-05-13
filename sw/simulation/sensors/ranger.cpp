@@ -1,6 +1,18 @@
 #include "ranger.h"
 #include "draw.h"
 
+Ranger::Ranger(Pose pose):self_pose(pose){
+    // The raw template for this laser sensor
+    _lasers.row(0) << 0,0,0; // apex of pyramid
+    _lasers.row(1) << -_range*std::tan(_fov/2), _range*std::tan(_fov/2),_range;
+    _lasers.row(2) << _range*std::tan(_fov/2), _range*std::tan(_fov/2),_range;
+    _lasers.row(3) << _range*std::tan(_fov/2), -_range*std::tan(_fov/2),_range;
+    _lasers.row(4) << -_range*std::tan(_fov/2), -_range*std::tan(_fov/2),_range;
+    
+    // pose of this particular ranger wrt the agent
+    _lasers_b =  pose.transform(_lasers);
+}
+
 void Ranger::animate(draw d){
     Eigen::Vector3f p0 = _lasers_b.row(0);
     Eigen::Vector3f p1 = _lasers_b.row(1);
@@ -15,11 +27,7 @@ void Ranger::animate(draw d){
     d.rect(p1, p2, p3, p4);
     if (abs(intersection(0))>=1e-10){ // just a way to check if the vector is not garbage
         d.points(parent_pose.inv_transform(intersection.transpose()));
-        // for (Eigen::MatrixXf intersection_set: intersections){            
-        //     d.points(parent_pose.inv_transform(intersection_set.transpose()));
-        // }
-    }
-    
+    }   
 }
 
 
@@ -31,37 +39,28 @@ float Ranger::getMeasurement(Pose pose){
     // dynamic pose update
     parent_pose = pose; // animation uses this so update it here
     _lasers_w = parent_pose.transform(_lasers_b);
-    
-    // intersections.clear(); // reset the vector
 
     float min_dist = 10000;
     Eigen::Vector3f min_pt(0,0,0);
-    Eigen::Index min_id;
     
     // for each laser
-    for (int i=1; i<=_num_lasers;i++){
+    for (int i=1; i<=_lasers_w.rows()-1; i++){
         float min_dist_obs = 10000;
         Eigen::Vector3f min_pt_obs(0,0,0);
         Eigen::Index min_id_obs;
         // for each obstacle in environment
         for (ObstacleBase* obstacle: environment.obstacles){
-            
             Eigen::MatrixXf intersection_obs = obstacle->check_collision(_lasers_w.row(0), _lasers_w.row(i));
-            // Eigen::MatrixXf intersection_obs = obstacle->check_collision(_lasers_w);
-
             if (intersection_obs.rows()!=0){
-                
+                // find the closest point among each obsacle for this laser        
                 float dist = (intersection_obs.rowwise() - pose.pos.transpose()).rowwise().squaredNorm().minCoeff(&min_id_obs);
                 if (dist<min_dist_obs){
-                    
                     min_pt_obs = intersection_obs.row(min_id_obs);
                     min_dist_obs = dist;
-                    };
+                }
             }
         }
-        // print(min_dist_obs);
-        // if (min_pt.sum()!=0)
-        // intersections.push_back(min_pt); 
+        // find the closest point among each laser
         if (min_dist_obs < min_dist){
             min_dist = min_dist_obs;
             min_pt = min_pt_obs;

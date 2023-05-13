@@ -4,8 +4,6 @@
 #include "types.h"
 #include "ranger.h"
 
-// class draw; // make circular dependency otherwise
-
 class MultiRanger{
     public:
         MultiRanger();
@@ -18,7 +16,6 @@ class MultiRanger{
         enum {FRONT, LEFT, RIGHT, BACK, BOTTOM};
         Vector<Ranger> _rangers = Vector<Ranger>(5);
         std::vector<float> _measurements;
-
 
 };
 

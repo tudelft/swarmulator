@@ -2,7 +2,6 @@
 #include "main.h"
 #include <vector>
 #include "draw.h"
-// #include "multiranger.h"
 #include "types.h"
 #include "math.h"
 
@@ -18,9 +17,6 @@ formation::formation(): t(SENSORS, SENSOR_MAX_RANGE){
 
     sensor_range = SENSOR_MAX_RANGE;
     min_sep = 20;
-    // print("\n",t.adjacency_mat_mag(1,0));
-    float theta = M_PI/2; 
-    // ranger = Ranger(Pose({2, 0, 0},  {std::cos(theta/2), 0, std::sin(theta/2), 0}));
     multi_ranger = MultiRanger();
 }
 
@@ -28,16 +24,11 @@ void formation::animation(const uint16_t ID)
 {
     draw d;
     d.circle_loop(sensor_range);
-    // d.sphere(s[ID]->state.pose.pos, s[ID]->state.pose.toAxisAngle(), sensor_range);
-
-    // sensor animations
-    // ranger.animate(d);
-    
     multi_ranger.animate(d);
-//   multi_ranger.getMeasurements(s[ID]->state.pose);
 }
 
 void formation::get_velocity_command(const uint16_t ID, float &v_x, float &v_y){}
+
 
 /*
 Generate a velocity towards/awayfrom target position such that current distance tends to target distance
@@ -47,9 +38,7 @@ pos: Current positon
 gain: multiplying factor 
 d_t: Target/desired distance
 d_c: Current distance
-
 */ 
-
 Eigen::Vector3f formation::calc_consensus_vel(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_t, float d_c, std::string type){
     double w = gain * (d_c/d_t - 1); // weight depends on gain and relative distance
     Eigen::Vector3f ret = pos_t - pos_c; 
@@ -82,8 +71,6 @@ Eigen::Vector3f formation::get_velocity_cmd(const uint16_t ID){
         v_des += v_form;
     }
  
-    // formation
-    // ranger.getMeasurement(s[ID]->state.pose);
     std::vector<float> ranges = multi_ranger.getMeasurements(s[ID]->state.pose);
 
     return v_des.normalized()*3;

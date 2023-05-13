@@ -56,8 +56,7 @@ Eigen::Vector3f Quad::check_collision(Eigen::Vector3f p0,Eigen::Vector3f p1, int
     if (si<0 or si>1) check = 1; // intersection point lies outside the line segment (no intersection)
     else check = 2; // unique intersection point;
 
-
-
+    // check if intersection lies within the quad face
     Eigen::Vector3f a = intersection-A;
     float b = a.dot((B-A).normalized());
     float c = a.dot((C-A).normalized());
@@ -65,9 +64,6 @@ Eigen::Vector3f Quad::check_collision(Eigen::Vector3f p0,Eigen::Vector3f p1, int
          (0 < c) && c < (C-A).norm()) == false){
         check = 1;
     }
-
-
-    // collisions.push_back(intersection);
     return intersection;
 }
 
@@ -83,10 +79,8 @@ Eigen::MatrixXf Cuboid::check_collision(Eigen::Vector3f p0, Eigen::Vector3f p1){
             collisions.row(j) = intersection;
             j++;
         }
-        
         i++;
     }
-
     return collisions(Eigen::seq(0,j-1), Eigen::all);;
 }
 
@@ -132,9 +126,6 @@ Cuboid::Cuboid(Vector<float> size, Pose pose){
     _planes[5] = new Quad(Eigen::Matrix<float, 4, 3>({p5, p6, p7, p8}) , pose); // front
 
 }
-
-
-
 
 void Cuboid::animate(draw d){
     for (uint i = 0;i< _planes.size(); i++){
