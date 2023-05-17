@@ -43,6 +43,8 @@ SOURCES_C = $(shell find $(SRC_FOLDER) -path $(CTRL_FOLDER) -prune -o -path $(AG
 ### Select controller files
 CTRL_INC = $(shell find $(SRC_FOLDER) -name $(CONTROLLER).cpp -printf '%h\n')
 SOURCES_CPP +=  $(shell find $(CTRL_INC) -type f -name *.cpp -print)
+SOURCES_CPP += sw/simulation/controllers/formation/formation.cpp 
+SOURCES_CPP +=	sw/simulation/controllers/wall_avoidance/wall_avoidance.cpp
 SOURCES_C +=  $(shell find $(CTRL_INC) -type f -name *.c -print)
 INC_DIRS += $(shell find $(CTRL_INC) -type d)
 

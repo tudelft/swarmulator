@@ -14,11 +14,24 @@ MultiRanger::MultiRanger(){
 
 }
 
+Eigen::MatrixXf MultiRanger::getAvoidDirections(){
+    Eigen::MatrixXf dirs(5,3);
+    dirs.row(1) = _rangers[FRONT].getAvoidDirection();
+    dirs.row(1) = _rangers[LEFT].getAvoidDirection();
+    dirs.row(1) = _rangers[RIGHT].getAvoidDirection();
+    dirs.row(1) = _rangers[BACK].getAvoidDirection();
+    dirs.row(1) = _rangers[BOTTOM].getAvoidDirection();
+
+    return dirs;
+}
+
+
 std::vector<float> MultiRanger::getMeasurements(Pose pose){
     _measurements.clear();
     for (int i=0; i<_rangers.get_len(); i++){
-        _measurements.push_back( _rangers[i].getMeasurement(pose));
+        _measurements.push_back(_rangers[i].getMeasurement(pose));
     }
+    
     return _measurements;
 }
 

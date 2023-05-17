@@ -19,6 +19,7 @@ class Controller
 protected:
   OmniscientObserver o;
   random_generator rg;
+  std::vector<Controller*> _controllers;
 
 public:
   /**
@@ -129,7 +130,7 @@ public:
    * @param v_x The desired velocity in v_x (to be set in this function)
    * @param v_y The desired velocity in v_y (to be set in this function)
    */
-  virtual void get_velocity_command(const uint16_t ID, float &v_x, float &v_y) = 0;
+  // virtual void get_velocity_command(const uint16_t ID, float &v_x, float &v_y) = 0;
   
   virtual Eigen::Vector3f get_velocity_cmd(const uint16_t ID) = 0;
 
@@ -146,6 +147,11 @@ public:
 
   float get_max_sensor_range();
   void set_max_sensor_range(float r);
+
+  Eigen::Vector3f prop(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_t, float d_c, std::string type="");
+  Eigen::Vector3f prop_max(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_t, float d_c, float d_m, std::string type="");
+
+  float brake_decay(float x, float p, float a, float v_m, float ro);
 };
 
 

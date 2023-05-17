@@ -29,8 +29,6 @@ Eigen::Vector3f Quad::check_collision(Eigen::Vector3f p0,Eigen::Vector3f p1, int
     float si = N/D;
     Eigen::Vector3f intersection = p0 + si*u;
     
-    // Check if the intersection lies withing the bounds of the plane
-
 //     Eigen::Matrix4f A;
 //     Eigen::Matrix4f B;
 
@@ -56,10 +54,12 @@ Eigen::Vector3f Quad::check_collision(Eigen::Vector3f p0,Eigen::Vector3f p1, int
     if (si<0 or si>1) check = 1; // intersection point lies outside the line segment (no intersection)
     else check = 2; // unique intersection point;
 
-    // check if intersection lies within the quad face
-    Eigen::Vector3f a = intersection-A;
-    float b = a.dot((B-A).normalized());
-    float c = a.dot((C-A).normalized());
+    // check if intersection lies within the quad face. Assumes that the quadrilateral is a parallelogram for now
+    Eigen::Vector3f a = intersection - A; 
+    float b = a.dot((B-A).normalized()); // projection on AB
+    float c = a.dot((C-A).normalized()); // projection on AC
+    
+    // if these projections are not within range, set the check to 1
     if (((0 < b) && b < (B-A).norm() && 
          (0 < c) && c < (C-A).norm()) == false){
         check = 1;
@@ -68,9 +68,13 @@ Eigen::Vector3f Quad::check_collision(Eigen::Vector3f p0,Eigen::Vector3f p1, int
 }
 
 
+/*
+Checks all faces of the cuboid for intersections made by the line p0 -- p1
+
+Returns: matrix with rows as intersection points
+*/
 Eigen::MatrixXf Cuboid::check_collision(Eigen::Vector3f p0, Eigen::Vector3f p1){
-    // std::vector<Eigen::Vector3f> collisions;
-    Eigen::Matrix<float, 6,3> collisions;
+    Eigen::Matrix<float, 6,3> collisions; // tbh there might only be 2 intersections at max (for a cuboid)
     int i = 0, j = 0;
     for (Quad* plane: _planes){
         int check;
@@ -84,6 +88,13 @@ Eigen::MatrixXf Cuboid::check_collision(Eigen::Vector3f p0, Eigen::Vector3f p1){
     return collisions(Eigen::seq(0,j-1), Eigen::all);;
 }
 
+/*
+Checks all faces of the cuboid for intersections with all the lines starting from the 
+first row in points(arg) to all other rows as points(arg)
+
+Returns a matrix with all intersections
+
+*/
 Eigen::MatrixXf Cuboid::check_collision(Eigen::Matrix<float, Eigen::Dynamic, 3> points){
     std::vector<Eigen::MatrixXf> collisions_vec;    
 
@@ -106,16 +117,19 @@ Eigen::MatrixXf Cuboid::check_collision(Eigen::Matrix<float, Eigen::Dynamic, 3> 
 }
 
 
-Cuboid::Cuboid(Vector<float> size, Pose pose){
+Cuboid::Cuboid(Vector<float> _size, Pose pose):size(_size){
+    float l = _size[0]/2;
+    float b = _size[1]/2;
+    float h = _size[2]/2;
 
-    std::initializer_list<float> p1 = {-size[0]/2, -size[1]/2, -size[2]/2};
-    std::initializer_list<float> p2 = {-size[0]/2, -size[1]/2, size[2]/2};
-    std::initializer_list<float> p3 = {-size[0]/2, size[1]/2, size[2]/2};
-    std::initializer_list<float> p4 = {-size[0]/2, size[1]/2, -size[2]/2};
-    std::initializer_list<float> p5 = {size[0]/2, -size[1]/2, -size[2]/2};
-    std::initializer_list<float> p6 = {size[0]/2, -size[1]/2, size[2]/2};
-    std::initializer_list<float> p7 = {size[0]/2, size[1]/2, size[2]/2};
-    std::initializer_list<float> p8 = {size[0]/2, size[1]/2, -size[2]/2};
+    std::initializer_list<float> p1 = {-l/2, -b/2, -h/2};
+    std::initializer_list<float> p2 = {-l/2, -b/2, h/2};
+    std::initializer_list<float> p3 = {-l/2, b/2, h/2};
+    std::initializer_list<float> p4 = {-l/2, b/2, -h/2};
+    std::initializer_list<float> p5 = {l/2, -b/2, -h/2};
+    std::initializer_list<float> p6 = {l/2, -b/2, h/2};
+    std::initializer_list<float> p7 = {l/2, b/2, h/2};
+    std::initializer_list<float> p8 = {l/2, b/2, -h/2};
 
     // vertices should be ordered 
     _planes[0] = new Quad(Eigen::Matrix<float, 4, 3>({p1, p2, p3, p4}) , pose); // back

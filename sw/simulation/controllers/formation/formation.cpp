@@ -17,39 +17,18 @@ formation::formation(): t(SENSORS, SENSOR_MAX_RANGE){
 
     sensor_range = SENSOR_MAX_RANGE;
     min_sep = 20;
-    multi_ranger = MultiRanger();
 }
 
 void formation::animation(const uint16_t ID)
 {
     draw d;
     d.circle_loop(sensor_range);
-    multi_ranger.animate(d);
-}
-
-void formation::get_velocity_command(const uint16_t ID, float &v_x, float &v_y){}
-
-
-/*
-Generate a velocity towards/awayfrom target position such that current distance tends to target distance
-
-pos_t: Target position
-pos: Current positon
-gain: multiplying factor 
-d_t: Target/desired distance
-d_c: Current distance
-*/ 
-Eigen::Vector3f formation::calc_consensus_vel(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_t, float d_c, std::string type){
-    double w = gain * (d_c/d_t - 1); // weight depends on gain and relative distance
-    Eigen::Vector3f ret = pos_t - pos_c; 
-    if (type == "unidir") w = abs(w);
-    return ret*w; 
 }
 
 Eigen::Vector3f formation::get_velocity_cmd(const uint16_t ID){
     // Get vector of all neighbors from closest to furthest
     std::vector<uint> closest = o.request_closest(ID);
-    Eigen::Vector3f v_des({0.,0.,0.});
+    Eigen::Vector3f v_form({0.,0.,0.});
 
     for (uint j: closest){
         // if (j==ID) continue;
@@ -67,11 +46,13 @@ Eigen::Vector3f formation::get_velocity_cmd(const uint16_t ID){
         // FORMATION
         Eigen::Vector3f pij_t({t.adjacency_mat(j, ID, 0),t.adjacency_mat(j, ID, 1), 0.});
         float dij_t = min_sep * t.adjacency_mat_mag(j, ID);
-        Eigen::Vector3f v_form = calc_consensus_vel(pij_t, pij_c, -0.1, dij_t, dij_c);
-        v_des += v_form;
+        v_form += prop(pij_t, pij_c, -10, dij_t, dij_c);
+        // v_des += v_form;
     }
  
-    std::vector<float> ranges = multi_ranger.getMeasurements(s[ID]->state.pose);
+   return v_form;
+    // print(v_coll);
+    // v_des += v_coll;
 
-    return v_des.normalized()*3;
+    // return v_des.normalized()*3;
 }

@@ -156,3 +156,60 @@ void Controller::set_max_sensor_range(float r)
 {
   sensor_range_max = r;
 }
+
+// Eigen::Vector3f wall_avoidance_ranger(const uint16_t ID, float gain){
+//     Eigen::Vector3f v_curr = s[ID]->state.vel;
+//     // std::vector<int> range_idx;
+//     std::vector<float> ranges = multi_ranger.getMeasurements(s[ID]->state.pose);
+//     Eigen::Vector3f v_coll = Eigen::Vector3f::Zero();
+//     for (uint i=0; i < ranges.size(); i++){
+//         if (ranges[i]!=10000){
+//             Eigen::Vector3f v_coll_cap = multi_ranger._rangers[i].getAvoidDirection();
+//             float v_diff_mag = (v_curr.normalized() - v_coll_cap).norm();
+//             v_coll += calc_consensus_vel(v_coll_cap, v_curr.normalized(), -10, 0, v_diff_mag, 2);
+        
+//         }
+        
+//     }
+// }
+
+
+
+/*
+Generate a velocity towards/awayfrom target position such that current distance tends to target distance
+
+pos_t: Target position
+pos: Current positon
+gain: multiplying factor 
+d_t: Target/desired distance
+d_c: Current distance
+*/ 
+Eigen::Vector3f Controller::prop(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_t, float d_c, std::string type){
+    double w = gain * (d_c/d_t - 1); // weight depends on gain and relative distance
+    Eigen::Vector3f ret = pos_t - pos_c; 
+    if (type == "unidir") w = abs(w);
+    return ret*w; 
+}
+
+Eigen::Vector3f Controller::prop_max(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_t, float d_c, float d_m, std::string type){
+    double w = gain * ((d_c-d_t)/(d_m - d_t)); // weight depends on gain and relative distance
+    Eigen::Vector3f ret = pos_t - pos_c; 
+    if (type == "unidir") w = abs(w);
+    return ret*w; 
+}
+
+float Controller::brake_decay(float x, float p, float a, float v_m, float ro){
+    float vel = (x - ro) * p;
+    if ((a <= 0) || (p <= 0) || (vel <= 0)){
+      return 0.0;
+    }
+    if (vel < a / p){
+      if (vel > v_m)
+        return v_m;
+    }
+        return vel;
+    vel = sqrt(2 * a * (x - ro) - a * a / p / p);
+    if (vel > v_m)
+        return v_m;
+    return vel;
+}

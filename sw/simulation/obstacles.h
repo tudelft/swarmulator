@@ -7,6 +7,7 @@ class draw;
 class ObstacleBase{
     public:
         Pose _pose; 
+        Vector<float> size;
         Eigen::MatrixXf _points;
         Eigen::MatrixXf _points_t;
     public:
@@ -40,9 +41,9 @@ class Cuboid: public ObstacleBase{
     private:
         std::vector<Quad*> _planes = std::vector<Quad*>(6);
     public:
-        // size = (l, b, h)
+        Vector<float> size;
         Cuboid(){};
-        Cuboid(Vector<float> size, Pose pose);
+        Cuboid(Vector<float> _size, Pose pose);
         
         // returns the point at which the line segment p0 p1 intersects with the cube
         // Eigen::VectorXf intersect(Eigen::VectorXf p0, Eigen::VectorXf p1);

@@ -58,42 +58,47 @@ void main_simulation_thread(int argc, char *argv[], std::string id)
 
   // Generate the random initial positions with (0,0) mean and 0.5 standard deviation
   if (nagents > 0) {
-    float spread = environment.limits(); // Default
-    std::vector<float> x0 = rg.uniform_float_vector(nagents, -spread, spread);
-    std::vector<float> y0 = rg.uniform_float_vector(nagents, -spread, spread);
-    std::vector<float> z0 = rg.uniform_float_vector(nagents, -spread, spread);
+    // float spread = environment.limits(); // Default
+    // Vector<float> spread = environment.obstacles[1]->size;
+    Vector<float> spread = {20.0,20.0,20.0};
+    std::vector<float> x0 = rg.uniform_float_vector(nagents, -spread[0]/2, spread[0]/2);
+    std::vector<float> y0 = rg.uniform_float_vector(nagents, -spread[1]/2, spread[1]/2);
+    std::vector<float> z0 = rg.uniform_float_vector(nagents, -spread[2]/2, spread[2]/2);
     std::vector<float> t0 = rg.uniform_float_vector(nagents, -M_PI, M_PI);
 
     // Check whether the robot is in the area, else fix.
     // Define rays extending beyond the maximum limits of the area (d) in all 4 directions, and use this to check whether the area is valid.
     std::vector<std::vector<float>> d(4);
-    d[0] = {0., spread * 1.3f}; // 1.3 is arbitrary, just something > 1.0
-    d[1] = {0., -spread * 1.3f};
-    d[2] = { spread * 1.3f, 0.};
-    d[3] = { -spread * 1.3f, 0.};
+    d[0] = {0., (spread[1]/2) * 1.3f}; // 1.3 is arbitrary, just something > 1.0
+    d[1] = {0., -(spread[1]/2) * 1.3f};
+    d[2] = { (spread[0]/2) * 1.3f, 0.};
+    d[3] = { -(spread[0]/2) * 1.3f, 0.};
 
-    uint16_t ID = 0;
-    while (ID < nagents) {
-      bool location_invalid = false;
-      for (uint16_t dir = 0; dir < d.size(); dir++) {
-        // std::vector<float> s_n = {x0[ID], y0[ID]};
-        State s_n;
-        s_n.pose.pos = {x0[ID], y0[ID], z0[ID]};
-        if (environment.valid(ID, s_n, d[dir])) {
-          location_invalid = true;
-          break; // An agent initialized outside of valid area was found. Proceed to fix it.
-        }
-      }
+    // bool location_invalid = false;
 
-      // Get a new location if invalid, else move on to test the next agent.
-      if (location_invalid) {
-        x0[ID] = rg.uniform_float(-spread, spread);
-        y0[ID] = rg.uniform_float(-spread, spread);
-        z0[ID] = rg.uniform_float(-spread, spread);
-      } else {
-        ID++;
-      }
-    }
+    // uint16_t ID = 0;
+    // while (ID < nagents) {
+    //   bool location_invalid = false;
+    //   for (uint16_t dir = 0; dir < d.size(); dir++) {
+    //     // std::vector<float> s_n = {x0[ID], y0[ID]};
+    //     State s_n;
+    //     s_n.pose.pos = {x0[ID], y0[ID], z0[ID]};
+    //     if (environment.valid(ID, s_n, d[dir])) {
+    //       location_invalid = true;
+    //       break; // An agent initialized outside of valid area was found. Proceed to fix it.
+    //     }
+    //   }
+
+    //   // Get a new location if invalid, else move on to test the next agent.
+    //   if (location_invalid) {
+    //     x0[ID] = rg.uniform_float(-spread[0]/2, spread[0]/2);
+    //     y0[ID] = rg.uniform_float(-spread[1]/2, spread[1]/2);
+    //     z0[ID] = rg.uniform_float(-spread[2]/2, spread[2]/2);
+    //     print(x0[ID]);
+    //   } else {
+    //     ID++;
+    //   }
+    // }
 
     // Generate the agents in the initial positions
     for (uint16_t ID = 0; ID < nagents; ID++) {
@@ -103,6 +108,7 @@ void main_simulation_thread(int argc, char *argv[], std::string id)
       State state;
       // state.pos = {x0[ID], y0[ID], z0[ID]};
       state.pose = Pose::fromEuler({x0[ID], y0[ID],0}, {0, 0, t0[ID]});
+      print(x0[ID]);
       // state.pose = Pose::fromEuler({4,-1 , 0}, {0, 0, 1.57});
       // state.psi = t0[ID];       
       create_new_agent(ID, state); // Create a new agent

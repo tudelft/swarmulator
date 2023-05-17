@@ -21,7 +21,9 @@ class Ranger{
         Ranger(){};
         Ranger(Pose pose);
         float getMeasurement(Pose parent_pose);
+        Eigen::Vector3f getAvoidDirection();
         void animate(draw d);
+        float range(){return _range;};
         
 };
 

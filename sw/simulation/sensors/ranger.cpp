@@ -30,6 +30,11 @@ void Ranger::animate(draw d){
     }   
 }
 
+Eigen::Vector3f Ranger::getAvoidDirection(){
+    Eigen::Vector3f lasers_center = (_lasers_w(Eigen::seq(1, Eigen::last),Eigen::seq(0,2)).colwise().sum());
+    Eigen::Vector3f dir = (lasers_center - parent_pose.pos);
+    return dir.normalized();
+}
 
 /*
 Check lasers for this ranger with all obstacles and return the single min distance 
@@ -67,6 +72,5 @@ float Ranger::getMeasurement(Pose pose){
         }
     }
     intersection = min_pt;
-    
     return min_dist;
 }
