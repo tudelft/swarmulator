@@ -17,7 +17,7 @@ Eigen::Vector3f wall_avoidance::get_velocity_cmd(const uint16_t ID){
             Eigen::Vector3f v_coll_cap = multi_ranger._rangers[i].getAvoidDirection();
             float v_diff_mag = (v_curr.normalized() - v_coll_cap).norm();
             // float gain = brake_decay();
-            v_coll += prop(v_coll_cap, v_curr.normalized(), -1, multi_ranger._rangers[i].range(), ranges[i]);
+            v_coll += nonlin_idx(v_coll_cap, v_curr.normalized(), -5, multi_ranger._rangers[i].range(), ranges[i], 0.3);
             // print(v_coll);
         }
     }

@@ -185,7 +185,7 @@ d_t: Target/desired distance
 d_c: Current distance
 */ 
 Eigen::Vector3f Controller::prop(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_t, float d_c, std::string type){
-    double w = gain * (d_c/d_t - 1); // weight depends on gain and relative distance
+    double w = gain * (1 - d_c/d_t); // weight depends on gain and relative distance
     Eigen::Vector3f ret = pos_t - pos_c; 
     if (type == "unidir") w = abs(w);
     return ret*w; 
@@ -197,6 +197,14 @@ Eigen::Vector3f Controller::prop_max(Eigen::Vector3f pos_t, Eigen::Vector3f pos_
     if (type == "unidir") w = abs(w);
     return ret*w; 
 }
+
+Eigen::Vector3f Controller::nonlin_idx(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_t, float d_c, float idx, bool unidir){
+    double w = gain * (1 - pow(d_c/d_t, idx)); // weight depends on gain and relative distance
+    Eigen::Vector3f ret = pos_t - pos_c; 
+    if (unidir) w = abs(w);
+    return ret*w; 
+}
+
 
 float Controller::brake_decay(float x, float p, float a, float v_m, float ro){
     float vel = (x - ro) * p;
@@ -213,3 +221,5 @@ float Controller::brake_decay(float x, float p, float a, float v_m, float ro){
         return v_m;
     return vel;
 }
+
+

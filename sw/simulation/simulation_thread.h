@@ -108,8 +108,8 @@ void main_simulation_thread(int argc, char *argv[], std::string id)
       State state;
       // state.pos = {x0[ID], y0[ID], z0[ID]};
       state.pose = Pose::fromEuler({x0[ID], y0[ID],0}, {0, 0, t0[ID]});
-      print(x0[ID]);
-      // state.pose = Pose::fromEuler({4,-1 , 0}, {0, 0, 1.57});
+      // print(x0[ID]);
+      // state.pose = Pose::fromEuler({10, 10 , 0}, {0, 0, 1.57});
       // state.psi = t0[ID];       
       create_new_agent(ID, state); // Create a new agent
     }

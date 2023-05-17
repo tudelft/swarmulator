@@ -46,7 +46,7 @@ Eigen::Vector3f formation::get_velocity_cmd(const uint16_t ID){
         // FORMATION
         Eigen::Vector3f pij_t({t.adjacency_mat(j, ID, 0),t.adjacency_mat(j, ID, 1), 0.});
         float dij_t = min_sep * t.adjacency_mat_mag(j, ID);
-        v_form += prop(pij_t, pij_c, -10, dij_t, dij_c);
+        v_form += prop(pij_t, pij_c, 10, dij_t, dij_c);
         // v_des += v_form;
     }
  

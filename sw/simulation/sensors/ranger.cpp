@@ -58,7 +58,8 @@ float Ranger::getMeasurement(Pose pose){
             Eigen::MatrixXf intersection_obs = obstacle->check_collision(_lasers_w.row(0), _lasers_w.row(i));
             if (intersection_obs.rows()!=0){
                 // find the closest point among each obsacle for this laser        
-                float dist = (intersection_obs.rowwise() - pose.pos.transpose()).rowwise().squaredNorm().minCoeff(&min_id_obs);
+                float dist = (intersection_obs.rowwise() - _lasers_w.row(0)).rowwise().norm().minCoeff(&min_id_obs);
+                // print(dist);
                 if (dist<min_dist_obs){
                     min_pt_obs = intersection_obs.row(min_id_obs);
                     min_dist_obs = dist;
