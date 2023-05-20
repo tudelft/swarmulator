@@ -7,7 +7,7 @@ class draw;
 class ObstacleBase{
     public:
         Pose _pose; 
-        Vector<float> size;
+        Vector<float> _bbox;
         Eigen::MatrixXf _points;
         Eigen::MatrixXf _points_t;
     public:
@@ -21,7 +21,7 @@ class ObstacleBase{
         // for obstacles with multiple points of intersection
         virtual Eigen::MatrixXf check_collision(Eigen::Vector3f p0, Eigen::Vector3f p1){return Eigen::MatrixXf();};
         virtual Eigen::MatrixXf check_collision(Eigen::Matrix<float, Eigen::Dynamic, 3> points){return Eigen::MatrixXf();};
-        
+        virtual Vector<float> bbox(){return _bbox;}
         // virtual std::vector<Eigen::MatrixXf> check_collisions(Eigen::Vector3f p0, Eigen::Vector3f p1, int* checks[]);
 };
 
@@ -41,7 +41,7 @@ class Cuboid: public ObstacleBase{
     private:
         std::vector<Quad*> _planes = std::vector<Quad*>(6);
     public:
-        Vector<float> size;
+        Vector<float> _bbox;
         Cuboid(){};
         Cuboid(Vector<float> _size, Pose pose);
         
@@ -51,6 +51,7 @@ class Cuboid: public ObstacleBase{
         // Vector<Quad*> get_primitives(){return _planes;}
         Eigen::MatrixXf check_collision(Eigen::Vector3f p0, Eigen::Vector3f p1);
         Eigen::MatrixXf check_collision(Eigen::Matrix<float, Eigen::Dynamic, 3> points);
+        virtual Vector<float> bbox(){return _bbox;}
 };
 
 #endif

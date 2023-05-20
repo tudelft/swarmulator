@@ -298,22 +298,23 @@ class Pose{
 		}
 		
 
-		Eigen::Vector4f toAxisAngle(){
+		Eigen::Vector4f toAxisAngle() const{
 			Eigen::Vector4f ret;
 
-			if (quat[0] > 1) quat.normalize(); // if w>1 acos and sqrt will produce errors, this cant happen if quaternion is normalised
+			// if (quat[0] > 1) quat.normalize(); // if w>1 acos and sqrt will produce errors, this cant happen if quaternion is normalised
 			ret[0] = 2 * acos(quat[0]);
 			float s = sqrt(1-quat[0]*quat[0]); // assuming quaternion normalised then w is less than 1, so term always positive.
 			if (s < 0.001) { // test to avoid divide by zero, s is always positive due to sqrt
 				// if s close to zero then direction of axis not important
-				ret[0] = quat[0]; // if it is important that axis is normalised then replace with x=1; y=z=0;
-				ret[1] = quat[1];
+				ret[1] = quat[1]; // if it is important that axis is normalised then replace with x=1; y=z=0;
 				ret[2] = quat[2];
+				ret[3] = quat[3];
 			} else {
-				ret[0] = quat[0] / s; // normalise axis
-				ret[1] = quat[1] / s;
+				ret[1] = quat[1] / s; // normalise axis
 				ret[2] = quat[2] / s;
+				ret[3] = quat[3] / s;
 			}
+			// print(ret[]);
 			return ret;
 		}
 

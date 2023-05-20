@@ -23,6 +23,8 @@ float center_x = 0;
 float center_y = 0;
 float sx = 0;
 float sy = 0;
+float sx_old = 0;
+float sy_old = 0;
 float zoom = 0;
 float zoom_scale = 0;
 float pointer_x, pointer_y;
@@ -30,7 +32,9 @@ float xrat = 1.0;
 float yrat = 1.0;
 bool paused = false;
 bool mouse_motion = false;
-
+int angleCube =0; // orbit amount
+bool orbiting; // orbit flag
+float ax = 1.0f,az=1.0f,ay =1.0f; //rotation axis
 /**
  * @brief keyboard_callback reads keyboard commands from the animation window of Swarmulator.
  *
@@ -131,6 +135,29 @@ void mouse_motion_callback(int x, int y)
     center_x += param->mouse_drag_speed() / zoom_scale * ((float)x / (float)glutGet(GLUT_WINDOW_WIDTH) - sx);
     center_y += param->mouse_drag_speed() / zoom_scale * (-(float)y / (float)glutGet(GLUT_WINDOW_HEIGHT) - sy);
   }
+  if (orbiting){
+
+    // the current location of cursor
+    float cx = (float)(2*x - (float)glutGet(GLUT_WINDOW_WIDTH))/ (float)glutGet(GLUT_WINDOW_WIDTH);
+    float cy = (float)(2*y - (float)glutGet(GLUT_WINDOW_HEIGHT))/ (float)glutGet(GLUT_WINDOW_HEIGHT);
+    
+    float dx = cx-sx; // increment in each movement
+    float dy = cy-sy;
+    float dz = 100.0f; // acts as a focal length
+
+
+    // ax,ay,az is the axis of rotation
+    // changes are added onto the axis itself to update it to the latest position
+    ax = dy +sy_old; 
+    ay = dx +sx_old;
+    az = 00.0f; //assume the axis of rotation to be always at the cube center 
+
+    // the magnitude of this axis is equal to the amount of rotation
+    // this axis represents the most updated state of rotation
+    float delta =  sqrt(pow(ax,2) + pow(ay, 2));
+    angleCube = delta*dz;
+
+  }
 }
 
 /**
@@ -158,16 +185,34 @@ void mouse_motion_callback_passive(int x, int y)
 float wall_x_0, wall_y_0;
 void mouse_click_callback(int button, int state, int x, int y)
 {
+
   // Click - left
-  if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+  if (button == GLUT_MIDDLE_BUTTON && state == GLUT_DOWN) {
     // Position on window in percentage
     sx = (float)x / (float)glutGet(GLUT_WINDOW_WIDTH);
     sy = -(float)y / (float)glutGet(GLUT_WINDOW_HEIGHT);
     mouse_motion = true;
   }
 
-  if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
+  if (button == GLUT_MIDDLE_BUTTON && state == GLUT_UP) {
     mouse_motion = false;
+    
+  }
+
+  if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+    orbiting = true;
+    // Position on window in percentage
+    // the start position in pixels of 
+    sx = (float)(2*x - (float)glutGet(GLUT_WINDOW_WIDTH))/ (float)glutGet(GLUT_WINDOW_WIDTH);
+    sy = (float)(2*y - (float)glutGet(GLUT_WINDOW_HEIGHT))/ (float)glutGet(GLUT_WINDOW_HEIGHT);
+    
+  }
+
+
+  if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
+    orbiting = false;
+    sx_old = ay;
+    sy_old = ax;
   }
 
   // Click - right (press down)

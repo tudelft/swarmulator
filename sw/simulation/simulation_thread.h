@@ -59,13 +59,14 @@ void main_simulation_thread(int argc, char *argv[], std::string id)
   // Generate the random initial positions with (0,0) mean and 0.5 standard deviation
   if (nagents > 0) {
     // float spread = environment.limits(); // Default
-    // Vector<float> spread = environment.obstacles[1]->size;
-    Vector<float> spread = {20.0,20.0,20.0};
+    Vector<float> spread = environment.obstacles[1]->bbox();
+    // print(environment.obstacles[1]->bbox());
+    // Vector<float> spread = {20.0,20.0,20.0};
     std::vector<float> x0 = rg.uniform_float_vector(nagents, -spread[0]/2, spread[0]/2);
     std::vector<float> y0 = rg.uniform_float_vector(nagents, -spread[1]/2, spread[1]/2);
     std::vector<float> z0 = rg.uniform_float_vector(nagents, -spread[2]/2, spread[2]/2);
     std::vector<float> t0 = rg.uniform_float_vector(nagents, -M_PI, M_PI);
-
+    // print(x0);
     // Check whether the robot is in the area, else fix.
     // Define rays extending beyond the maximum limits of the area (d) in all 4 directions, and use this to check whether the area is valid.
     std::vector<std::vector<float>> d(4);
@@ -107,7 +108,7 @@ void main_simulation_thread(int argc, char *argv[], std::string id)
       // std::vector<float> state = {x0[ID], y0[ID], 0.0, 0.0, 0.0, 0.0, t0[ID], 0.0};
       State state;
       // state.pos = {x0[ID], y0[ID], z0[ID]};
-      state.pose = Pose::fromEuler({x0[ID], y0[ID],0}, {0, 0, t0[ID]});
+      state.pose = Pose::fromEuler({x0[ID], y0[ID],z0[ID]}, {0, 0, t0[ID]});
       // print(x0[ID]);
       // state.pose = Pose::fromEuler({10, 10 , 0}, {0, 0, 1.57});
       // state.psi = t0[ID];       

@@ -258,8 +258,10 @@ void draw::agent(const uint16_t &ID, const float &x, const float &y, const float
 void draw::agent(const uint16_t &ID, const State state)
 {
   glPushMatrix();
-  glTranslatef(state.pose.pos[0] * xrat, state.pose.pos[1] * yrat, 0.0); // ENU to NED
-  glRotatef(rad2deg(state.pose.toEuler()[2]), 0.0, 0, 1);
+  // print(state.pose.pos);
+  glTranslatef(state.pose.pos[0] * xrat, state.pose.pos[1] * yrat, state.pose.pos[2]); // ENU to NED
+  Eigen::Vector4f axis_angle = state.pose.toAxisAngle();
+  glRotatef(rad2deg(axis_angle[0]), axis_angle[1], axis_angle[2], axis_angle[3]);
   s[ID]->animation(); // Uses the animation function defined by the agent in use
   s[ID]->controller->animation(ID); // Draws additional stuff from the controller, such as sensors
   agent_number(ID);

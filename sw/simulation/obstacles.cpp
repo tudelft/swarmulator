@@ -1,6 +1,7 @@
 #include "obstacles.h"
 #include "draw.h"
 
+
 void Quad::animate(draw d){
     d.polyline(_points_t);
 }
@@ -117,10 +118,10 @@ Eigen::MatrixXf Cuboid::check_collision(Eigen::Matrix<float, Eigen::Dynamic, 3> 
 }
 
 
-Cuboid::Cuboid(Vector<float> _size, Pose pose):size(_size){
-    float l = _size[0]/2;
-    float b = _size[1]/2;
-    float h = _size[2]/2;
+Cuboid::Cuboid(Vector<float> size, Pose pose):_bbox(size){
+    float l = size[0];
+    float b = size[1];
+    float h = size[2];
 
     std::initializer_list<float> p1 = {-l/2, -b/2, -h/2};
     std::initializer_list<float> p2 = {-l/2, -b/2, h/2};

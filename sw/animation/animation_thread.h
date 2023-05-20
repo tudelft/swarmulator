@@ -31,7 +31,7 @@ void main_loop_function()
 
   zoom_scale = -(float)10 / (-(float)10 + (float)zoom);
   glTranslatef(center_x, center_y, -10 + zoom);
-
+  glRotatef(angleCube, ax, ay, az);
   // Draw fixed one time objects
   static draw drawer; // Drawer object
   drawer.data(); // Put data in corner
@@ -69,7 +69,7 @@ void GL_Setup(int width, int height)
 {
   glViewport(0, 100, width, height);
   glMatrixMode(GL_PROJECTION);
-  gluPerspective(45, (float)width / height, .1, 100);
+  gluPerspective(45, (float)width / height, .1, 150);
   glMatrixMode(GL_MODELVIEW);
 }
 
