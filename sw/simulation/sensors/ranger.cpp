@@ -2,7 +2,7 @@
 #include "draw.h"
 
 Ranger::Ranger(Pose pose):self_pose(pose){
-    // The raw template for this laser sensor
+    // The raw template for this laser sensor. By default pyramid opens toward +z axis
     _lasers.row(0) << 0,0,0; // apex of pyramid
     _lasers.row(1) << -_range*std::tan(_fov/2), _range*std::tan(_fov/2),_range;
     _lasers.row(2) << _range*std::tan(_fov/2), _range*std::tan(_fov/2),_range;
@@ -14,6 +14,7 @@ Ranger::Ranger(Pose pose):self_pose(pose){
 }
 
 void Ranger::animate(draw d){
+    // animation is done relative to agent frame so only body frame lasers are used here.
     Eigen::Vector3f p0 = _lasers_b.row(0);
     Eigen::Vector3f p1 = _lasers_b.row(1);
     Eigen::Vector3f p2 = _lasers_b.row(2); 
@@ -31,8 +32,8 @@ void Ranger::animate(draw d){
 }
 
 Eigen::Vector3f Ranger::getAvoidDirection(){
-    Eigen::Vector3f lasers_center = (_lasers_w(Eigen::seq(1, Eigen::last),Eigen::seq(0,2)).colwise().sum());
-    Eigen::Vector3f dir = (lasers_center - parent_pose.pos);
+    Eigen::Vector3f lasers_center = (_lasers_w(Eigen::seq(1, Eigen::last),Eigen::seq(0,2)).colwise().sum())/4;
+    Eigen::Vector3f dir = (parent_pose.pos - lasers_center);
     return dir.normalized();
 }
 

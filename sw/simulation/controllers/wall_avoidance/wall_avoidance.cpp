@@ -14,11 +14,13 @@ Eigen::Vector3f wall_avoidance::get_velocity_cmd(const uint16_t ID){
     Eigen::Vector3f v_coll = Eigen::Vector3f::Zero();
     for (uint i=0; i < ranges.size(); i++){
         if (ranges[i]!=10000){ // if nothing is sensed the range is 10000. change this
-            Eigen::Vector3f v_coll_cap = multi_ranger._rangers[i].getAvoidDirection();
-            float v_diff_mag = (v_curr.normalized() - v_coll_cap).norm();
+            Eigen::Vector3f v_shill_cap = multi_ranger._rangers[i].getAvoidDirection();
+            
+            float v_diff_mag = (v_curr.normalized() - v_shill_cap).norm();
             // float gain = brake_decay();
-            v_coll += nonlin_idx(v_coll_cap, v_curr.normalized(), -5, multi_ranger._rangers[i].range(), ranges[i], 0.3);
-            // print(v_coll);
+            // v_coll += = nonlin_idx_max(v_shill_cap, Eigen::Vector3f::Zero(), 15, multi_ranger._rangers[i].range(),0,abs(multi_ranger._rangers[i].range()-ranges[i]), 0.3);
+            v_coll += nonlin_idx(v_shill_cap, Eigen::Vector3f::Zero(), 15, multi_ranger._rangers[i].range(), ranges[i], 0.3);;
+            // print(i, " coll speed: ", v_coll_i.transpose(), " dist: ", ranges[i]);
         }
     }
 
