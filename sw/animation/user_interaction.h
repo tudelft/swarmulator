@@ -25,13 +25,13 @@ float sx = 0;
 float sy = 0;
 float sx_old = 0;
 float sy_old = 0;
-float zoom = 0;
+float zoom = -90;
 float zoom_scale = 0;
 float pointer_x, pointer_y;
 float xrat = 1.0;
 float yrat = 1.0;
 bool paused = false;
-bool mouse_motion = false;
+bool pan = false;
 int angleCube =0; // orbit amount
 bool orbiting; // orbit flag
 float ax = 1.0f,az=1.0f,ay =1.0f; //rotation axis
@@ -131,7 +131,7 @@ void keyboard_callback(unsigned char key, __attribute__((unused)) int a, __attri
 void mouse_motion_callback(int x, int y)
 {
   // Move the center
-  if (mouse_motion) {
+  if (pan) {
     center_x += param->mouse_drag_speed() / zoom_scale * ((float)x / (float)glutGet(GLUT_WINDOW_WIDTH) - sx);
     center_y += param->mouse_drag_speed() / zoom_scale * (-(float)y / (float)glutGet(GLUT_WINDOW_HEIGHT) - sy);
   }
@@ -187,15 +187,15 @@ void mouse_click_callback(int button, int state, int x, int y)
 {
 
   // Click - left
-  if (button == GLUT_MIDDLE_BUTTON && state == GLUT_DOWN) {
+  if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
     // Position on window in percentage
     sx = (float)x / (float)glutGet(GLUT_WINDOW_WIDTH);
     sy = -(float)y / (float)glutGet(GLUT_WINDOW_HEIGHT);
-    mouse_motion = true;
+    pan = true;
   }
 
-  if (button == GLUT_MIDDLE_BUTTON && state == GLUT_UP) {
-    mouse_motion = false;
+  if (button == GLUT_RIGHT_BUTTON && state == GLUT_UP) {
+    pan = false;
     
   }
 
@@ -216,14 +216,14 @@ void mouse_click_callback(int button, int state, int x, int y)
   }
 
   // Click - right (press down)
-  if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
+  if (button == GLUT_MIDDLE_BUTTON && state == GLUT_DOWN) {
     // Start position of the new wall
     wall_x_0 = pointer_x;
     wall_y_0 = pointer_y;
   }
 
   // Click - right (release)
-  if (button == GLUT_RIGHT_BUTTON && state == GLUT_UP) {
+  if (button == GLUT_MIDDLE_BUTTON && state == GLUT_UP) {
     // End position of the new wall
     float wall_x_1 = ((float)x / (float)glutGet(GLUT_WINDOW_WIDTH) * 8. - 4.) / (zoom_scale * xrat) - center_x;
     float wall_y_1 = -((float)y / (float)glutGet(GLUT_WINDOW_HEIGHT) * 8. - 4.) / (zoom_scale * yrat) - center_y;

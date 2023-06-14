@@ -83,6 +83,7 @@ public:
   */
   void point();
   void points(Eigen::MatrixXf p, Vector<float> color = {1,0,0,0});
+  void points(std::vector<Eigen::Vector3f> points, Vector<float> color = {1,0,0,0});
 
   /**
    * Draw relevant simulation data in the bottom left corner (like the time of simulation)

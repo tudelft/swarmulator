@@ -204,6 +204,16 @@ void draw::points(Eigen::MatrixXf p, Vector<float> color){
   glEnd();
 }
 
+void draw::points(std::vector<Eigen::Vector3f> points, Vector<float> color){
+  glPointSize(10.0);
+  glColor4f(color[0], color[1], color[2], color[3]);
+  glBegin(GL_POINTS);
+  for (Eigen::Vector3f p: points){
+    glVertex3f(p(0), p(1), p(2));
+  }
+  glEnd();
+}
+
 void draw::point()
 {
   glPointSize(10.0);
@@ -271,8 +281,10 @@ void draw::agent(const uint16_t &ID, const State state)
 void draw::velocity_arrow(const uint16_t &ID, const State state)
 {
   glPushMatrix();
-  glTranslatef(state.pose.pos[0] * xrat, state.pose.pos[1] * yrat, 0.0); // ENU to NED
-  glRotatef(0.0, 0.0, 0.0, 1.0);
+  glColor3f(255, 0,0); // red
+  glTranslatef(state.pose.pos[0] * xrat, state.pose.pos[1] * yrat, state.pose.pos[2] * yrat); // ENU to NED
+  Eigen::Vector4f axis_angle = state.pose.toAxisAngle();
+  glRotatef(rad2deg(axis_angle[0]), axis_angle[1], axis_angle[2], axis_angle[3]);
   line(state.vel[0], state.vel[1]);
   glPopMatrix();
 }
