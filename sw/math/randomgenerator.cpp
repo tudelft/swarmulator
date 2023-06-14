@@ -2,6 +2,7 @@
 #include <iostream>
 #include "stdint.h"
 #include "auxiliary.h"
+#include "eigen3/Eigen/Dense"
 
 random_generator::random_generator()
 {
@@ -45,6 +46,17 @@ std::vector<float> random_generator::gaussian_float_vector(const int &length, co
   // Generate the random vector
   std::vector<float> v(length, 0);
   for (uint16_t i = 0; i < length; i++) {
+    v[i] = gaussian_float(mean, std);
+  }
+
+  return v;
+}
+
+Eigen::Vector3f random_generator::gaussian_float_vector3(const float &mean, const float &std)
+{
+  // Generate the random vector
+  Eigen::Vector3f v;
+  for (uint16_t i = 0; i < 3; i++) {
     v[i] = gaussian_float(mean, std);
   }
 

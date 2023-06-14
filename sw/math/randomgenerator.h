@@ -10,7 +10,7 @@
 #include "math.h"
 #include <vector>
 #include <random>
-
+#include "eigen3/Eigen/Dense"
 /**
  * Defines a graph structure that can be used to assess the topology of the swarm
  */
@@ -75,6 +75,8 @@ public:
    * @param max Maximum value in range
    */
   std::vector<float> uniform_float_vector(const int &length, const float &min, const float &max);
+
+  Eigen::Vector3f gaussian_float_vector3(const float &mean, const float &std);
 
 };
 

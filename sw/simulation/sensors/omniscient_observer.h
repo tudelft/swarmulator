@@ -98,6 +98,8 @@ public:
    * @return float The position of the centroid along the dimension dim
    */
   float get_centroid(const uint16_t &dim);
+  Eigen::Vector3f get_centroid();
+  Eigen::Vector3f get_centroid_inrange(const uint16_t ID, float range);
 
   /**
    * Gets the current orientation of the robot

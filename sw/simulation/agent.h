@@ -45,7 +45,9 @@ public:
    * @param dim dimension x or y
    * @return position along x or y
    */
-  float get_position(uint16_t dim, bool noise = false);
+  // float get_position(uint16_t dim, bool noise = false);
+  Eigen::Vector3f get_position(bool noise = false);
+
   float get_velocity(uint16_t dim, bool noise = false);
   float get_accel(uint16_t dim, bool noise = false);
 

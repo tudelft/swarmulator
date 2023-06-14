@@ -28,8 +28,8 @@ std::vector<uint> OmniscientObserver::request_closest(const uint16_t &ID)
   std::vector<uint> ind;
   for (uint16_t i = 0; i < s.size(); i++) {
     dm[i].values = (sqrt(
-                      pow(s[i]->get_position(0) - s[ID]->get_position(0), 2.0)
-                      + pow(s[i]->get_position(1) - s[ID]->get_position(1), 2.0)
+                      pow(s[i]->get_position()[0] - s[ID]->get_position()[0], 2.0)
+                      + pow(s[i]->get_position()[1] - s[ID]->get_position()[1], 2.0)
                     ));
     dm[i].index = i;
   }
@@ -50,8 +50,9 @@ std::vector<uint> OmniscientObserver::request_closest_inrange(const uint16_t &ID
   std::vector<uint> ind;
   for (uint16_t i = 0; i < s.size(); i++) {
     dm[i].values = (sqrt(
-                      pow(s[i]->get_position(0) - s[ID]->get_position(0), 2.0)
-                      + pow(s[i]->get_position(1) - s[ID]->get_position(1), 2.0)
+                      pow(s[i]->get_position()[0] - s[ID]->get_position()[0], 2.0)
+                      + pow(s[i]->get_position()[1] - s[ID]->get_position()[1], 2.0)
+                      + pow(s[i]->get_position()[2] - s[ID]->get_position()[2], 2.0)
                     ));
     dm[i].index = i;
   }
@@ -101,21 +102,41 @@ float OmniscientObserver::get_centroid(const uint16_t &dim)
 {
   float c = 0;
   for (uint16_t i = 0; i < s.size(); i++) {
-    c += s[i]->get_position(dim) / (float)s.size();
+    c += s[i]->get_position()[dim] / (float)s.size();
   }
   return c;
 }
 
+Eigen::Vector3f OmniscientObserver::get_centroid()
+{
+  Eigen::Vector3f centroid = Eigen::Vector3f::Zero();
+  for (uint16_t i = 0; i < s.size(); i++) {
+    centroid += s[i]->get_position();
+  }
+  return centroid/(float)s.size();
+}
+
+Eigen::Vector3f OmniscientObserver::get_centroid_inrange(const uint16_t ID, float range)
+{
+  Eigen::Vector3f centroid = Eigen::Vector3f::Zero();
+  std::vector<uint> closest = request_closest_inrange(ID, range);
+  for (uint i:closest) {
+    centroid += s[i]->get_position();
+  }
+  return centroid/(float)closest.size();
+}
+
+
 float OmniscientObserver::request_distance_dim(const uint16_t &ID, const uint16_t &ID_tracked, const uint16_t &dim)
 {
-  return s[ID_tracked]->get_position(dim) - s[ID]->get_position(dim);
+  return s[ID_tracked]->get_position()[dim] - s[ID]->get_position()[dim];
 }
 
 float OmniscientObserver::request_distance(const uint16_t &ID, const uint16_t &ID_tracked)
 {
   float u = 0;
   for (uint16_t i = 0; i < 2; i++) {
-    float dd = s[ID_tracked]->get_position(i) - s[ID]->get_position(i);
+    float dd = s[ID_tracked]->get_position()[i] - s[ID]->get_position()[i];
     u += pow(dd, 2);
   }
   float noise = rg.gaussian_float(0.0, NOISE_R);
@@ -169,7 +190,7 @@ bool OmniscientObserver::sense_food(const uint16_t ID, uint16_t &food_ID, float 
   for (uint16_t i = 0; i < environment.food.size(); i++) {
     float u = 0;
     for (size_t j = 0; j < 2; j++) {
-      float dd = s[ID]->get_position(j) - environment.food[i][j];
+      float dd = s[ID]->get_position()[j] - environment.food[i][j];
       u += pow(dd, 2);
     }
     if (sqrt(u) < range) {
@@ -185,8 +206,8 @@ bool OmniscientObserver::sense_food(const uint16_t ID, uint16_t &food_ID, float 
 void OmniscientObserver::beacon(const uint16_t ID, float &r, float &b)
 {
   mtx_env.lock_shared();
-  float x = environment.beacon[0] - s[ID]->get_position(0);
-  float y = environment.beacon[1] - s[ID]->get_position(1);
+  float x = environment.beacon[0] - s[ID]->get_position()[0];
+  float y = environment.beacon[1] - s[ID]->get_position()[1];
   cart2polar(x, y, r, b);
 #if COMMAND_LOCAL
   b -= own_bearing(ID);
