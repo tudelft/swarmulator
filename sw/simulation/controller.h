@@ -152,6 +152,7 @@ public:
   Eigen::Vector3f prop_max(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_t, float d_c, float d_m, std::string type="");
   Eigen::Vector3f nonlin_idx(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_t, float d_c, float idx, bool unidir=false);
   Eigen::Vector3f nonlin_idx_max(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_m, float d_t, float d_c, float idx, bool unidir=false);
+  Eigen::Vector3f vel_transfer(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_m, float d_t, float d_s, float idx);
 
   float brake_decay(float x, float p, float a, float v_m, float ro);
 };

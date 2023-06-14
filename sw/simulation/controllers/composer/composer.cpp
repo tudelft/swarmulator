@@ -8,7 +8,7 @@ composer::composer(){
     controllers.push_back(new wall_avoidance());
     // target_follow* tf_controller = ;
     // tf_controller->set_waypoints();
-    // controllers.push_back(new target_follow({Eigen::Vector3f(-15,-15,5), Eigen::Vector3f(-15,15,5), Eigen::Vector3f(15,-15,5)}));
+    controllers.push_back(new target_follow({Eigen::Vector3f(-15,-15,5), Eigen::Vector3f(-15,15,5), Eigen::Vector3f(15,-15,5)}));
 
 }
 

@@ -14,7 +14,7 @@ template<typename T, typename... Ts>
 inline void print(const T head, const Ts... tail){
   std::cout << head;
   print(tail...);
-  // std::cout<<std::endl;
+  std::cout<<std::endl;
 }
 
 template<typename T>

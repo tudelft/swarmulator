@@ -196,7 +196,7 @@ Eigen::Vector3f Controller::prop_max(Eigen::Vector3f pos_t, Eigen::Vector3f pos_
     double w = gain * ((d_c-d_t)/(d_m - d_t)); // weight depends on gain and relative distance
     Eigen::Vector3f ret = pos_t - pos_c; 
     if (type == "unidir") w = abs(w);
-    if (w>6) w = 6;
+    if (w>gain) w = gain;
     return ret.normalized()*w; 
 }
 
@@ -214,7 +214,7 @@ Eigen::Vector3f Controller::nonlin_idx_max(Eigen::Vector3f pos_t, Eigen::Vector3
     double w = gain * (pow(abs(d_c -d_t)/(d_m - d_t), idx)); // weight depends on gain and relative distance
     Eigen::Vector3f ret = pos_t - pos_c; 
     if (unidir) w = abs(w);
-    if (abs(w)>6) w = 6*(w/abs(w));
+    if (abs(w)>gain) w = gain*(w/abs(w));
     return ret.normalized()*w; 
 }
 
