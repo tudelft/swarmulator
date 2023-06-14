@@ -188,6 +188,7 @@ Eigen::Vector3f Controller::prop(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, d
     double w = gain * (1 - d_c/d_t); // weight depends on gain and relative distance
     Eigen::Vector3f ret = pos_t - pos_c; 
     if (type == "unidir") w = abs(w);
+    if (w>6) w = 6;
     return ret*w; 
 }
 
@@ -195,6 +196,7 @@ Eigen::Vector3f Controller::prop_max(Eigen::Vector3f pos_t, Eigen::Vector3f pos_
     double w = gain * ((d_c-d_t)/(d_m - d_t)); // weight depends on gain and relative distance
     Eigen::Vector3f ret = pos_t - pos_c; 
     if (type == "unidir") w = abs(w);
+    if (w>6) w = 6;
     return ret.normalized()*w; 
 }
 
@@ -204,15 +206,41 @@ Eigen::Vector3f Controller::nonlin_idx(Eigen::Vector3f pos_t, Eigen::Vector3f po
     if (unidir) w = abs(w);
     // print(ret.normalized().transpose());
     // print(pos_c.transpose());
+    if (w>gain) w = gain;
     return ret.normalized()*w; 
 }
 
 Eigen::Vector3f Controller::nonlin_idx_max(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_m, float d_t, float d_c, float idx, bool unidir){
-    double w = gain * (pow((d_c -d_t)/(d_m - d_t), idx)); // weight depends on gain and relative distance
+    double w = gain * (pow(abs(d_c -d_t)/(d_m - d_t), idx)); // weight depends on gain and relative distance
     Eigen::Vector3f ret = pos_t - pos_c; 
     if (unidir) w = abs(w);
+    if (abs(w)>6) w = 6*(w/abs(w));
     return ret.normalized()*w; 
 }
+
+Eigen::Vector3f Controller::vel_transfer(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_m, float d_t, float d_s, float idx){
+    Eigen::Vector3f p_rel = pos_t - pos_c; 
+    float d_c = p_rel.norm();
+    float w=0;
+    // d_t += d_s;
+    if (d_c < 0){
+        w = -gain;
+    }
+    else if ((0 < d_c) and  (d_c< (d_t-d_s)) ){
+        w = - gain * pow(1 - (d_c/(d_t-d_s)), idx); 
+    }
+    else if (((d_t + d_s) < d_c) and (d_c < d_m)){
+        w = gain*pow((d_c - (d_t + d_s))/(d_m - (d_t + d_s)), idx);
+    }
+    else if (d_c > d_m){
+        w = gain;
+    } 
+
+    return p_rel.normalized()*w;
+
+}
+
+
 
 float Controller::brake_decay(float x, float p, float a, float v_m, float ro){
     float vel = (x - ro) * p;

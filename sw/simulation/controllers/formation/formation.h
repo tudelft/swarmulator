@@ -16,6 +16,7 @@ class formation: public Controller{
         Template_Calculator t;
         float sensor_range;
         float min_sep;
+        float formation_gain;
 
     public:
         // virtual void get_velocity_command(const uint16_t ID, float &v_x, float &v_y);

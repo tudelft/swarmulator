@@ -4,7 +4,7 @@
 #include "target_follow.h"
 
 composer::composer(){
-    // controllers.push_back(new formation());
+    controllers.push_back(new formation());
     controllers.push_back(new wall_avoidance());
     // target_follow* tf_controller = ;
     // tf_controller->set_waypoints();
