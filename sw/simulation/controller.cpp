@@ -195,16 +195,24 @@ Eigen::Vector3f Controller::prop_max(Eigen::Vector3f pos_t, Eigen::Vector3f pos_
     double w = gain * ((d_c-d_t)/(d_m - d_t)); // weight depends on gain and relative distance
     Eigen::Vector3f ret = pos_t - pos_c; 
     if (type == "unidir") w = abs(w);
-    return ret*w; 
+    return ret.normalized()*w; 
 }
 
 Eigen::Vector3f Controller::nonlin_idx(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_t, float d_c, float idx, bool unidir){
     double w = gain * (1 - pow(d_c/d_t, idx)); // weight depends on gain and relative distance
     Eigen::Vector3f ret = pos_t - pos_c; 
     if (unidir) w = abs(w);
-    return ret*w; 
+    // print(ret.normalized().transpose());
+    // print(pos_c.transpose());
+    return ret.normalized()*w; 
 }
 
+Eigen::Vector3f Controller::nonlin_idx_max(Eigen::Vector3f pos_t, Eigen::Vector3f pos_c, double gain, float d_m, float d_t, float d_c, float idx, bool unidir){
+    double w = gain * (pow((d_c -d_t)/(d_m - d_t), idx)); // weight depends on gain and relative distance
+    Eigen::Vector3f ret = pos_t - pos_c; 
+    if (unidir) w = abs(w);
+    return ret.normalized()*w; 
+}
 
 float Controller::brake_decay(float x, float p, float a, float v_m, float ro){
     float vel = (x - ro) * p;
