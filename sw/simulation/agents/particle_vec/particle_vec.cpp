@@ -70,5 +70,6 @@ void particle_vec::animation()
 {
   draw d;   
   // d.triangle(state.pose.transform(tri_pts));
-  d.triangle(param->scale());
+  d.triangle(1.5);
+  d.circle_loop(2, 2);
 }

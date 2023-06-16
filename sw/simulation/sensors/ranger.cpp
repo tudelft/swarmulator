@@ -21,13 +21,13 @@ void Ranger::animate(draw d){
     Eigen::Vector3f p3 = _lasers_b.row(3);
     Eigen::Vector3f p4 = _lasers_b.row(4);
     
-    d.line(p0, p1);
-    d.line(p0, p2);
-    d.line(p0, p3);
-    d.line(p0, p4);
-    d.rect(p1, p2, p3, p4);
+    d.line(p0, p1, 1, {0.6,0.6,0.6,1});
+    d.line(p0, p2, 1, {0.6,0.6,0.6,1});
+    d.line(p0, p3, 1, {0.6,0.6,0.6,1});
+    d.line(p0, p4, 1, {0.6,0.6,0.6,1});
+    d.rect(p1, p2, p3, p4, 1, {0.6,0.6,0.6,1});
     if (abs(intersection(0))>=1e-10){ // just a way to check if the vector is not garbage
-        d.points(parent_pose.inv_transform(intersection.transpose()));
+        d.points(parent_pose.inv_transform(intersection.transpose()), {1, 0, 0, 0.5});
     }   
 }
 

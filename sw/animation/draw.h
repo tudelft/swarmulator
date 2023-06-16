@@ -30,7 +30,7 @@ public:
   void triangle(const float &s);
   void triangle(const Eigen::MatrixXf points, const float scl=1.0);
 
-  void rect(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const Eigen::Vector3f &p3, const Eigen::Vector3f &p4, const float &width =1, const Vector<float> color = {255,255,255});
+  void rect(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const Eigen::Vector3f &p3, const Eigen::Vector3f &p4, const float &width =1, const std::array<float, 4> color = {0,0,0, 1});
   /**
    * Draw a red circle of radius r
    *
@@ -43,7 +43,7 @@ public:
    *
    * @param r Radius of the circular loop
    */
-  void circle_loop(const float &r);
+  void circle_loop(const float &r, const float& width);
 
   /**
    * Draw a white line from (0,0) to (x,y)
@@ -61,13 +61,13 @@ public:
    * @param width
    */
   void line(const float &x, const float &y, const float &width);
-  void line(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const float &width =1, const Vector<float> color = {255,255,255});
+  void line(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const float &width = 1, const std::array<float, 4> color = {0,0,0,1});
 
 
-  void polyline(const Eigen::MatrixXf &points, const float &width=1, const Vector<float> color= {1,1,1,1});
+  void polyline(const Eigen::MatrixXf &points, const float &width=1, const std::array<float,4> color = {0.0f,0.0f,0.0f,1.0f});
   
   
-  void polygon(const Eigen::MatrixXf &points, const float &width=1, const Vector<float> color= {1,1,1,1});
+  void polygon(const Eigen::MatrixXf &points, const float &width=1, const std::array<float,4> color = {0.0f,0.0f,0.0f,1.0f});
   /**
    * Draw the global x and y axes at (0,0)
    */
@@ -82,8 +82,8 @@ public:
   * Draw a small white point
   */
   void point();
-  void points(Eigen::MatrixXf p, Vector<float> color = {1,0,0,0});
-  void points(std::vector<Eigen::Vector3f> points, Vector<float> color = {1,0,0,0});
+  void points(Eigen::MatrixXf p, const std::array<float, 4>& color = {1,0,0,1});
+  void points(std::vector<Eigen::Vector3f> points, const std::array<float, 4>& color = {1,0,0,1});
 
   /**
    * Draw relevant simulation data in the bottom left corner (like the time of simulation)

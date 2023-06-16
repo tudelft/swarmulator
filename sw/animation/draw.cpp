@@ -24,7 +24,7 @@ void draw::axis_label()
 void draw::agent_number(const uint16_t &ID)
 {
   glRasterPos2f(-0.01, 0.035);
-  glColor3f(1.0, 1.0, 1.0); // Background color
+  glColor3f(0.0, 0.0, 0.0); // Background color
 
   std::stringstream ss;
   ss << (int)ID;
@@ -36,7 +36,7 @@ void draw::triangle(const float &scl)
   glPushMatrix();
 
   glBegin(GL_POLYGON);
-  glColor3ub(200, 000, 000); // Red
+  glColor3ub(255, 20, 20); // Red
 
   glVertex2f(-1 * scl,  1 * scl);
   glVertex2f(-1 * scl, -1 * scl);
@@ -90,16 +90,17 @@ void draw::circle(const float &d)
   }
   glEnd();
 
-  glColor3ub(255, 255, 255); // White
+  glColor3ub(0, 0, 0); // black
   glPopMatrix();
 }
 
-void draw::circle_loop(const float &r)
+void draw::circle_loop(const float &r, const float& width)
 {
   int num_segments = 30; // Resolution
   glPushMatrix();
-  glLineWidth(1);
+  glLineWidth(width);
   glBegin(GL_LINE_LOOP);
+   glColor3ub(0, 0, 0); // White
   for (int i = 0; i < num_segments; i++) {
     float theta = 2.0f * M_PI * float(i) / float(num_segments);//get the current angle
     float x = r * yrat * cosf(theta);                 //calculate the x component
@@ -107,7 +108,7 @@ void draw::circle_loop(const float &r)
     glVertex2d(x, y);
   }
   glEnd();
-  glColor3ub(255, 255, 255); // White
+  glColor3ub(0, 0, 0); // White
   glPopMatrix();
 }
 
@@ -115,7 +116,7 @@ void draw::line(const float &x, const float &y)
 {
   glPushMatrix();
   glLineWidth(2.5);
-  glColor3f(1.0, 1.0, 1.0);
+  glColor3f(0, 0.0, 0.0);
   glBegin(GL_LINES);
   glVertex3f(0.0, 0.0, 0.0);
   glVertex3f(x * xrat, -y * yrat, 0);
@@ -135,7 +136,7 @@ void draw::line(const float &x, const float &y, const float &width)
   glPopMatrix();
 }
 
-void draw::line(const Eigen::Vector3f &p1, const Eigen::Vector3f& p2, const float &width, const Vector<float> color)
+void draw::line(const Eigen::Vector3f &p1, const Eigen::Vector3f& p2, const float &width, const std::array<float, 4> color)
 {
   glPushMatrix();
   glLineWidth(width);
@@ -147,7 +148,7 @@ void draw::line(const Eigen::Vector3f &p1, const Eigen::Vector3f& p2, const floa
   glPopMatrix();
 }
 
-void draw::rect(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const Eigen::Vector3f &p3, const Eigen::Vector3f &p4, const float &width, const Vector<float> color){
+void draw::rect(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const Eigen::Vector3f &p3, const Eigen::Vector3f &p4, const float &width, const std::array<float, 4> color){
     glPushMatrix();
     glLineWidth(width);
     glColor3f(color[0], color[1], color[2]);
@@ -162,7 +163,7 @@ void draw::rect(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const Eige
 
 }
 
-void draw::polygon(const Eigen::MatrixXf &points, const float &width, const Vector<float> color){
+void draw::polygon(const Eigen::MatrixXf &points, const float &width, const std::array<float,4> color){
     glPushMatrix();
     glBegin(GL_POLYGON);
     glColor4f(color[0], color[1], color[2], color[3]); // Redish
@@ -176,7 +177,7 @@ void draw::polygon(const Eigen::MatrixXf &points, const float &width, const Vect
     glPopMatrix();
 }
 
-void draw::polyline(const Eigen::MatrixXf &points, const float &width, const Vector<float> color)
+void draw::polyline(const Eigen::MatrixXf &points, const float &width, const std::array<float,4> color)
 {
   glPushMatrix();
   glLineWidth(width);
@@ -194,8 +195,8 @@ void draw::polyline(const Eigen::MatrixXf &points, const float &width, const Vec
   glPopMatrix();
 }
 
-void draw::points(Eigen::MatrixXf p, Vector<float> color){
-  glPointSize(10.0);
+void draw::points(Eigen::MatrixXf p, const std::array<float, 4>& color){
+  glPointSize(2.0);
   glColor4f(color[0], color[1], color[2], color[3]);
   glBegin(GL_POINTS);
   for (int i=0; i < p.rows(); i++){
@@ -204,8 +205,8 @@ void draw::points(Eigen::MatrixXf p, Vector<float> color){
   glEnd();
 }
 
-void draw::points(std::vector<Eigen::Vector3f> points, Vector<float> color){
-  glPointSize(10.0);
+void draw::points(std::vector<Eigen::Vector3f> points, const std::array<float, 4>& color){
+  glPointSize(2.0);
   glColor4f(color[0], color[1], color[2], color[3]);
   glBegin(GL_POINTS);
   for (Eigen::Vector3f p: points){
@@ -224,7 +225,7 @@ void draw::point()
 
 void draw::axes()
 {
-  float lineintensity = 1.0;
+  float lineintensity = 0.2;
   glLineWidth(0.5);
   glBegin(GL_LINES);
   glLineStipple(1, 0xAAAA);  // [1]

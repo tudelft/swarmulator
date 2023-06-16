@@ -23,7 +23,7 @@ formation::formation(): t(SENSORS, SENSOR_MAX_RANGE){
 void formation::animation(const uint16_t ID)
 {
     draw d;
-    d.circle_loop(sensor_range);
+    // d.circle_loop(sensor_range);
 }
 
 Eigen::Vector3f formation::get_velocity_cmd(const uint16_t ID){
