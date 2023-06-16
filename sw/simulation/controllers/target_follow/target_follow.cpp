@@ -43,6 +43,6 @@ bool target_follow::current_wp_reached(){
 void target_follow::animation(const uint16_t ID)
 {
     draw d;
-    d.points(wp_list);
+    // d.points(wp_list);
         
 }

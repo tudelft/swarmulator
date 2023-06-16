@@ -67,6 +67,7 @@ void main_loop_function()
  */
 void GL_Setup(int width, int height)
 {
+  glClearColor(1.0f, 1.0f, 1.0f, 1.0f);  // Set clear color to white
   glViewport(0, 100, width, height);
   glMatrixMode(GL_PROJECTION);
   gluPerspective(45, (float)width / height, .1, 150);
@@ -95,6 +96,7 @@ void main_animation_thread()
   int argc = 1;
   char *argv[1] = {(char *)"  "};
   glutInit(&argc, argv);
+  
   glutInitWindowPosition(0, 0); // Initialize at top left corner of screen
   glutInitWindowSize(param->window_width(), param->window_height()); // Set dimensions
   glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE);

@@ -15,8 +15,8 @@ using namespace std;
 
 Environment::Environment(void)
 {
-  obstacles.push_back(new Cuboid({10,20,30}, Pose({0,0,0}, {1,0,0,0})));
-  obstacles.push_back(new Cuboid({70,70,40},Pose({0,0,0}, {1,0,0,0})));
+  obstacles.push_back(new Cuboid({10,20,30}, Pose({0,0,0}, {1,0,0,0}), {0,0,0,1})); // obstacle
+  obstacles.push_back(new Cuboid({70,70,40},Pose({0,0,0}, {1,0,0,0}), {0,0,0,0.5}, 3)); // arena
   // print(obstacle->get_primitives()[0]->_points_t);
   define_walls();
   if (!strcmp(param->fitness().c_str(), "food")) {
@@ -141,13 +141,13 @@ bool Environment::valid(const uint16_t ID, State s_n, std::vector<float> s)
 void Environment::animate(void)
 {
   draw d;
-  for (size_t i = 0; i < walls.size(); i++) {
-    d.segment(walls[i][0], walls[i][1], walls[i][2], walls[i][3]);
-  }
+  // for (size_t i = 0; i < walls.size(); i++) {
+  //   d.segment(walls[i][0], walls[i][1], walls[i][2], walls[i][3]);
+  // }
 
-  for (size_t i = 0; i < food.size(); i++) {
-    d.food(food[i][0], food[i][1]);
-  }
+  // for (size_t i = 0; i < food.size(); i++) {
+  //   d.food(food[i][0], food[i][1]);
+  // }
   for (ObstacleBase* obstacle: obstacles){
     obstacle->animate(d);
   }

@@ -3,7 +3,7 @@
 
 
 void Quad::animate(draw d){
-    d.polyline(_points_t);
+    d.polyline(_points_t, _width, _color);
 }
 
 Eigen::Vector3f Quad::check_collision(Eigen::Vector3f p0,Eigen::Vector3f p1, int& check){
@@ -118,7 +118,7 @@ Eigen::MatrixXf Cuboid::check_collision(Eigen::Matrix<float, Eigen::Dynamic, 3> 
 }
 
 
-Cuboid::Cuboid(Vector<float> size, Pose pose):_bbox(size){
+Cuboid::Cuboid(Vector<float> size, Pose pose, const std::array<float,4> color, float width):_bbox(size){
     float l = size[0];
     float b = size[1];
     float h = size[2];
@@ -133,14 +133,15 @@ Cuboid::Cuboid(Vector<float> size, Pose pose):_bbox(size){
     std::initializer_list<float> p8 = {l/2, b/2, -h/2};
 
     // vertices should be ordered 
-    _planes[0] = new Quad(Eigen::Matrix<float, 4, 3>({p1, p2, p3, p4}) , pose); // back
-    _planes[1] = new Quad(Eigen::Matrix<float, 4, 3>({p1, p2, p6, p5}) , pose); // left
-    _planes[2] = new Quad(Eigen::Matrix<float, 4, 3>({p3, p4, p8, p7}) , pose); // right
-    _planes[3] = new Quad(Eigen::Matrix<float, 4, 3>({p1, p4, p8, p5}) , pose); // bottom
-    _planes[4] = new Quad(Eigen::Matrix<float, 4, 3>({p2, p3, p7, p6}) , pose); // top
-    _planes[5] = new Quad(Eigen::Matrix<float, 4, 3>({p5, p6, p7, p8}) , pose); // front
+    _planes[0] = new Quad(Eigen::Matrix<float, 4, 3>({p1, p2, p3, p4}) , pose, color, width); // back
+    _planes[1] = new Quad(Eigen::Matrix<float, 4, 3>({p1, p2, p6, p5}) , pose, color, width); // left
+    _planes[2] = new Quad(Eigen::Matrix<float, 4, 3>({p3, p4, p8, p7}) , pose, color, width); // right
+    _planes[3] = new Quad(Eigen::Matrix<float, 4, 3>({p1, p4, p8, p5}) , pose, color, width); // bottom
+    _planes[4] = new Quad(Eigen::Matrix<float, 4, 3>({p2, p3, p7, p6}) , pose, color, width); // top
+    _planes[5] = new Quad(Eigen::Matrix<float, 4, 3>({p5, p6, p7, p8}) , pose, color, width); // front
 
 }
+
 
 void Cuboid::animate(draw d){
     for (uint i = 0;i< _planes.size(); i++){
