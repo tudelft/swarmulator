@@ -241,8 +241,8 @@ void mouse_click_callback(int button, int state, int x, int y)
   // Guard on too much / too little zoom
   if (zoom > 9) {
     zoom = 9;
-  } else if (zoom < -90) {
-    zoom = -90;
+  } else if (zoom < -120) {
+    zoom = -120;
   }
 }
 

@@ -16,7 +16,7 @@ using namespace std;
 Environment::Environment(void)
 {
   obstacles.push_back(new Cuboid({10,20,30}, Pose({0,0,0}, {1,0,0,0}), {0,0,0,1})); // obstacle
-  obstacles.push_back(new Cuboid({70,70,40},Pose({0,0,0}, {1,0,0,0}), {0,0,0,0.5}, 3)); // arena
+  obstacles.push_back(new Cuboid({70,70,40},Pose({0,0,0}, {1,0,0,0}), {0,0,0,0}, 3)); // arena
   // print(obstacle->get_primitives()[0]->_points_t);
   define_walls();
   if (!strcmp(param->fitness().c_str(), "food")) {

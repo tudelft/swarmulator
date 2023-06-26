@@ -27,7 +27,7 @@ void Ranger::animate(draw d){
     d.line(p0, p4, 1, {0.6,0.6,0.6,1});
     d.rect(p1, p2, p3, p4, 1, {0.6,0.6,0.6,1});
     if (abs(intersection(0))>=1e-10){ // just a way to check if the vector is not garbage
-        d.points(parent_pose.inv_transform(intersection.transpose()), {1, 0, 0, 0.5});
+        d.points(parent_pose.inv_transform(intersection.transpose()), {1, 0, 0, 1});
     }   
 }
 
