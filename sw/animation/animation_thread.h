@@ -34,9 +34,9 @@ void main_loop_function()
   glRotatef(angleCube, ax, ay, az);
   // Draw fixed one time objects
   static draw drawer; // Drawer object
-  drawer.data(); // Put data in corner
-  drawer.axes(); // Put x and y global axes
-  drawer.axis_label(); // Axis label
+  // drawer.data(); // Put data in corner
+  // drawer.axes(); // Put x and y global axes
+  // drawer.axis_label(); // Axis label
   environment.animate(); // Animate the environment walls
 
   // Draw all robots
@@ -70,7 +70,7 @@ void GL_Setup(int width, int height)
   glClearColor(1.0f, 1.0f, 1.0f, 1.0f);  // Set clear color to white
   glViewport(0, 100, width, height);
   glMatrixMode(GL_PROJECTION);
-  gluPerspective(45, (float)width / height, .1, 150);
+  gluPerspective(45, (float)width / height, .1, 180);
   glMatrixMode(GL_MODELVIEW);
 }
 

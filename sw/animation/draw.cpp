@@ -43,7 +43,7 @@ void draw::triangle(const float &scl)
   glVertex2f(2.0 * scl,  0 * scl);
   glEnd();
 
-  glColor3ub(255, 255, 255); // White
+  glColor3ub(255, 255, 255); // Whitsavesavee
   glPopMatrix();
 }
 
@@ -140,7 +140,7 @@ void draw::line(const Eigen::Vector3f &p1, const Eigen::Vector3f& p2, const floa
 {
   glPushMatrix();
   glLineWidth(width);
-  glColor3f(color[0], color[1], color[2]);
+  glColor4f(color[0], color[1], color[2], color[3]);
   glBegin(GL_LINES);
   glVertex3f(p1[0], p1[1], p1[2]);
   glVertex3f(p2[0], p2[1], p2[2]);
@@ -151,7 +151,7 @@ void draw::line(const Eigen::Vector3f &p1, const Eigen::Vector3f& p2, const floa
 void draw::rect(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const Eigen::Vector3f &p3, const Eigen::Vector3f &p4, const float &width, const std::array<float, 4> color){
     glPushMatrix();
     glLineWidth(width);
-    glColor3f(color[0], color[1], color[2]);
+    glColor4f(color[0], color[1], color[2], color[4]);
     glBegin(GL_LINE_STRIP);
     glVertex3f(p1[0], p1[1], p1[2]);
     glVertex3f(p2[0], p2[1], p2[2]);
@@ -166,7 +166,7 @@ void draw::rect(const Eigen::Vector3f &p1, const Eigen::Vector3f &p2, const Eige
 void draw::polygon(const Eigen::MatrixXf &points, const float &width, const std::array<float,4> color){
     glPushMatrix();
     glBegin(GL_POLYGON);
-    glColor4f(color[0], color[1], color[2], color[3]); // Redish
+    glColor4f(color[0], color[1], color[2], color[3]);
     for (int i = 0; i < points.rows(); i++) { // Resolution
       glVertex3f(points(i,0),points(i,1),points(i,2));
     }
@@ -181,7 +181,7 @@ void draw::polyline(const Eigen::MatrixXf &points, const float &width, const std
 {
   glPushMatrix();
   glLineWidth(width);
-  glColor3f(color[0], color[1], color[2]);
+  glColor4f(color[0], color[1], color[2], color[3]);
   int l = points.rows();
   for (int i=0; i < l; i++){
     glBegin(GL_LINES);
@@ -196,7 +196,7 @@ void draw::polyline(const Eigen::MatrixXf &points, const float &width, const std
 }
 
 void draw::points(Eigen::MatrixXf p, const std::array<float, 4>& color){
-  glPointSize(2.0);
+  glPointSize(8.0);
   glColor4f(color[0], color[1], color[2], color[3]);
   glBegin(GL_POINTS);
   for (int i=0; i < p.rows(); i++){
@@ -206,7 +206,7 @@ void draw::points(Eigen::MatrixXf p, const std::array<float, 4>& color){
 }
 
 void draw::points(std::vector<Eigen::Vector3f> points, const std::array<float, 4>& color){
-  glPointSize(2.0);
+  glPointSize(8.0);
   glColor4f(color[0], color[1], color[2], color[3]);
   glBegin(GL_POINTS);
   for (Eigen::Vector3f p: points){
