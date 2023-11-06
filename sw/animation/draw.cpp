@@ -3,6 +3,45 @@
 #include <cmath>
 #include "fitness_functions.h"
 
+
+color3ub green = {83, 255, 48};
+color3ub yellow = {245, 220, 34};
+color3ub orange = {255, 147, 42};
+
+color3ub cyan = {52, 237, 250};
+color3ub red = {200, 0, 0};
+
+
+void setOrthographicProjection()
+{
+  glMatrixMode(GL_PROJECTION);
+  glPushMatrix();
+  glLoadIdentity();
+  gluOrtho2D(0,glutGet(GLUT_WINDOW_WIDTH),glutGet(GLUT_WINDOW_HEIGHT),0);
+  glMatrixMode(GL_MODELVIEW);
+}
+
+void restorePerspectiveProjection()
+{
+  glMatrixMode(GL_PROJECTION);
+  glPopMatrix();
+  glMatrixMode(GL_MODELVIEW);
+}
+
+void draw::info_text(std::string str)
+{
+  setOrthographicProjection();
+
+  glPushMatrix();
+  glLoadIdentity();
+  glRasterPos2f(15, glutGet(GLUT_WINDOW_HEIGHT)-(15+2*13));
+  glColor3ub(255, 255, 255);  // white
+  glutBitmapString(GLUT_BITMAP_8_BY_13, (unsigned char *) str.c_str());
+  glPopMatrix();
+
+  restorePerspectiveProjection();
+}
+
 void draw::data()
 {
   glRasterPos2f((-3.9 / zoom_scale - center_x), (-3.9 / zoom_scale - center_y));
@@ -36,6 +75,21 @@ void draw::triangle(const float &scl)
 
   glBegin(GL_POLYGON);
   glColor3ub(200, 000, 000); // Red
+  glVertex2f(-1 * scl,  1 * scl);
+  glVertex2f(-1 * scl, -1 * scl);
+  glVertex2f(2.0 * scl,  0 * scl);
+  glEnd();
+
+  glColor3ub(255, 255, 255); // White
+  glPopMatrix();
+}
+
+void draw::triangle(const float &scl, const color3ub &color)
+{
+  glPushMatrix();
+
+  glBegin(GL_POLYGON);
+  glColor3ub(color.r, color.g, color.b); // Red
   glVertex2f(-1 * scl,  1 * scl);
   glVertex2f(-1 * scl, -1 * scl);
   glVertex2f(2.0 * scl,  0 * scl);
@@ -129,7 +183,7 @@ void draw::point()
 
 void draw::axes()
 {
-  float lineintensity = 1.0;
+  float lineintensity = 0.8;
   glLineWidth(0.5);
   glBegin(GL_LINES);
   glLineStipple(1, 0xAAAA);  // [1]
@@ -181,6 +235,8 @@ void draw::agent(const uint16_t &ID, const float &x, const float &y, const float
   glPopMatrix();
 }
 
+
+
 void draw::velocity_arrow(const uint16_t &ID, const float &x, const float &y, const float &v_x, const float &v_y)
 {
   glPushMatrix();
@@ -196,5 +252,36 @@ void draw::food(const float &x, const float &y)
   glTranslatef(y * xrat, x * yrat, 0.0);
   glRotatef(90, 0.0, 0.0, 1.0);
   point();
+  glPopMatrix();
+}
+
+void draw::rel_loc_agent(const uint16_t &ID)
+{
+  glPushMatrix();
+  agents[ID]->animation();
+  agent_number(ID);
+  glPopMatrix();
+}
+
+void draw::agent_raw(const uint16_t ID, const float x, const float y, const float yaw)
+{
+  glPushMatrix();
+  glTranslatef(x, y, 0.0f);
+  glRotatef(rad2deg(yaw), 0.0f, 0.0f, 1.0f);
+  triangle(param->scale(), red);
+  agent_number(ID);
+  glPopMatrix();
+}
+
+void draw::estimate(const uint16_t &ID, const float &rel_x, const float &rel_y, const float &rel_psi)
+{
+  float scale = 0.2;
+  glPushMatrix();
+  // glTranslatef(rel_x, -rel_y, 0.0); // ENU to NED
+  // glRotatef(rad2deg(-rel_psi), 0.0, 0, 1);
+  glTranslatef(rel_x, rel_y, 0.0); // ENU to NED
+  glRotatef(rad2deg(rel_psi), 0.0, 0, 1);
+  triangle(scale, cyan);
+  agent_number(ID);
   glPopMatrix();
 }

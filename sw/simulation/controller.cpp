@@ -105,14 +105,14 @@ void Controller::set_saturation(const float &lim)
 bool Controller::wall_avoidance_bounce(const uint16_t ID, float &v_x, float &v_y, float rangesensor)
 {
   // Predict what the command wants and see if it will hit a wall, then fix it.
-  std::vector<float> sn = agents[ID]->state;
+  std::vector<float> next_state = agents[ID]->state;
   float r_temp, ang_temp, vx_temp, vy_temp;
   cart2polar(v_x, v_y, r_temp, ang_temp); // direction of velocity
   polar2cart(rangesensor, ang_temp, vx_temp, vy_temp); // use rangesensor to sense walls
-  sn[0] += vx_temp;
-  sn[1] += vy_temp;
+  next_state[STATE_X] += vx_temp;
+  next_state[STATE_Y] += vy_temp;
   float slope;
-  bool test = environment.check_for_collision(ID, sn, agents[ID]->state, slope);
+  bool test = environment.check_for_collision(ID, next_state, agents[ID]->state, slope);
   if (test) {
     float v, ang;
     cart2polar(v_x, v_y, v, ang);
@@ -127,25 +127,56 @@ bool Controller::wall_avoidance_bounce(const uint16_t ID, float &v_x, float &v_y
 bool Controller::wall_avoidance_turn(const uint16_t ID, float &v, float &dpsitheta, float rangesensor)
 {
   // Predict what the command wants and see if it will hit a wall, then fix it.
-  std::vector<float> sn = agents[ID]->state;
+  std::vector<float> next_state = agents[ID]->state;
   float r_temp, ang_temp, vx_temp, vy_temp, vx_global, vy_global, slope;
-  rotate_l2g_xy(0.5, 0.5, sn[6], vx_global, vy_global);
+  rotate_l2g_xy(0.5, 0.5, next_state[STATE_YAW], vx_global, vy_global);
   cart2polar(vx_global, vy_global, r_temp, ang_temp); // direction of velocity
   polar2cart(rangesensor, ang_temp, vx_temp, vy_temp); // use rangesensor to sense walls
-  sn[0] += vx_temp;
-  sn[1] += vy_temp;
-  bool test1 = environment.check_for_collision(ID, sn, agents[ID]->state, slope);
+  next_state[STATE_X] += vx_temp;
+  next_state[STATE_Y] += vy_temp;
+  bool test1 = environment.check_for_collision(ID, next_state, agents[ID]->state, slope);
 
-  sn = agents[ID]->state;
-  rotate_l2g_xy(0.5, -0.5, sn[6], vx_global, vy_global);
+  next_state = agents[ID]->state;
+  rotate_l2g_xy(0.5, -0.5, next_state[STATE_YAW], vx_global, vy_global);
   cart2polar(vx_global, vy_global, r_temp, ang_temp); // direction of velocity
   polar2cart(rangesensor, ang_temp, vx_temp, vy_temp); // use rangesensor to sense walls
-  sn[0] += vx_temp;
-  sn[1] += vy_temp;
+  next_state[STATE_X] += vx_temp;
+  next_state[STATE_Y] += vy_temp;
 
-  bool test2 = environment.check_for_collision(ID, sn, agents[ID]->state, slope);
+  bool test2 = environment.check_for_collision(ID, next_state, agents[ID]->state, slope);
   if (test1 || test2) {
     v = 0.;
+    dpsitheta = 0.4;
+    return true; // Wall!
+  }
+  return false; // No wall
+}
+
+bool Controller::wall_avoidance_xyy(const uint16_t ID, float &vx, float &vy, float &dpsitheta, float rangesensor)
+{
+  // Predict what the command wants and see if it will hit a wall, then fix it.
+  std::vector<float> next_state = agents[ID]->state;
+  float r_temp, ang_temp, vx_temp, vy_temp, vx_global, vy_global, slope;
+  rotate_l2g_xy(vx, vy, next_state[STATE_YAW], vx_global, vy_global);
+  cart2polar(vx_global, vy_global, r_temp, ang_temp); // direction of velocity
+  polar2cart(rangesensor, ang_temp, vx_temp, vy_temp); // use rangesensor to sense walls
+  // next_state[0] += vx_temp;
+  next_state[STATE_X] += vx_global / realtimefactor + rangesensor;
+  // next_state[1] += vy_temp;
+  next_state[STATE_Y] += vy_global / realtimefactor + rangesensor;
+  bool test1 = environment.check_for_collision_soft(ID, next_state, agents[ID]->state, slope);
+
+  // next_state = agents[ID]->state;
+  // rotate_l2g_xy(vx, -vy, next_state[STATE_YAW], vx_global, vy_global);
+  // cart2polar(vx_global, vy_global, r_temp, ang_temp); // direction of velocity
+  // polar2cart(rangesensor, ang_temp, vx_temp, vy_temp); // use rangesensor to sense walls
+  // next_state[STATE_X] += vx_temp;
+  // next_state[STATE_Y] += vy_temp;
+
+  // bool test2 = environment.check_for_collision(ID, next_state, agents[ID]->state, slope);
+  if (test1) {
+    vx = 0.;
+    vy = 0.;
     dpsitheta = 0.4;
     return true; // Wall!
   }

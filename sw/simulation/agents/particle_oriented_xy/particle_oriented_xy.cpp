@@ -20,8 +20,11 @@ vector<float> particle_oriented_xy::state_update(vector<float> s)
   // NED frame
   // x+ towards North
   // y+ towards East
-  float vx_des, vy_des = 0.;
-  float vx_global, vy_global, dpsirate = 0.;
+  float vx_des = 0.;
+  float vy_des = 0.;
+  float vx_global = 0.;
+  float vy_global = 0.;
+  float dpsirate = 0.;
   if (!manual) {
     controller->get_velocity_command(ID, vx_des, vy_des); // Command comes out in the local frame
   } else {

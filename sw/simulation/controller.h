@@ -132,6 +132,7 @@ public:
    * @param v_y The desired velocity in v_y (to be set in this function)
    */
   virtual void get_velocity_command(const uint16_t ID, float &v_x, float &v_y) = 0;
+  // virtual void get_velocity_command(const uint16_t ID, float &v_x, float &v_y, float &dpsi) = 0;
 
   /**
    * General wall avoidance function to use within get_velocity_command() to instigate a wall avoidance maneuver
@@ -141,8 +142,10 @@ public:
    * @param v_y The desired velocity in v_y (amended in this function)
    */
   bool wall_avoidance_bounce(const uint16_t ID, float &v_x, float &v_y, float rangesensor);
-  bool wall_avoidance_turn(const uint16_t ID, float &v_x, float &v_y, float rangesensor);
+  bool wall_avoidance_turn(const uint16_t ID, float &v_x, float &dpsitheta, float rangesensor);
+  bool wall_avoidance_xyy(const uint16_t ID, float &v_x, float &v_y, float &dpsitheta, float rangesensor);
   virtual void animation(const uint16_t ID) = 0;
+  virtual void rel_loc_animation(const uint16_t agent_ID, const uint16_t estimator_ID) = 0;
 
   float get_max_sensor_range();
   void set_max_sensor_range(float r);

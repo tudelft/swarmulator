@@ -29,6 +29,12 @@ struct color3ub{
   uint8_t b;
 };
 
+extern color3ub green;
+extern color3ub yellow;
+extern color3ub orange;
+extern color3ub cyan;
+extern color3ub red;
+
 class draw
 {
 public:
@@ -40,6 +46,9 @@ public:
    * @param s Scale of the triangle
    */
   void triangle(const float &s);
+
+  void triangle(const float &scl, const color3ub &color);
+
 
   /**
    * Draw a red circle of radius r
@@ -107,7 +116,7 @@ public:
    * Draw relevant simulation data in the bottom left corner (like the time of simulation)
    */
   void data();
-
+  void info_text(std::string str);
   /**
    * Write the x,y label on the global axis along the given dimension dim
    *
@@ -132,6 +141,10 @@ public:
    */
   void agent(const uint16_t &ID, const float &x, const float &y, const float &orientation);
 
+  void rel_loc_agent(const uint16_t &ID);
+  void agent_raw(const uint16_t ID, const float x, const float y, const float yaw);
+
+
   /**
    * Draw a line showing the velocity of the agent
    *
@@ -150,6 +163,9 @@ public:
    * @param y The y position of the food
    */
   void food(const float &x, const float &y);
+
+  void estimate(const uint16_t &ID, const float &rel_x, const float &rel_y, const float &rel_psi);
+
 };
 
 #endif /*DRAW_H*/

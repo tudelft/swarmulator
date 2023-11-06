@@ -8,6 +8,10 @@
 
 #include "randomgenerator.h"
 #include "settings.h"
+#include "swarm_ranging.h"
+
+#include "terminalinfo.h"
+
 
 #define UWB_MSG_TYPE_PING 0
 #define UWB_MSG_TYPE_DIST 1
@@ -16,7 +20,10 @@
 #define RANGING_STATUS_PASSIVE 1
 #define RANGING_STATUS_ACTIVE 2
 
-#define STATUS_TIMEOUT 20
+#define STATUS_TIMEOUT 0.5f
+
+#define UWB_PHY_HEADER_TIME_ns 141192
+#define UWB_DATARATE_bps 6800000 
 
 struct ranging_message {
     uint8_t type;
@@ -26,6 +33,7 @@ struct ranging_message {
     float source_rhox;
     float source_rhoy;
     float source_dpsi;
+    float timestamp;            // timestamp(seconds)
 };
 
 extern std::shared_mutex uwb_mutex;
@@ -34,11 +42,13 @@ class UltraWidebandChannel
 {
     random_generator rg;
     float uwb_range;
+    terminalinfo console_print;
 private:
     std::vector<uint8_t> agent_joined;
-    std::vector<ranging_message> messages;
+    std::vector<std::vector<swarm_ranging_ping_t>> delivery_queues;
+    std::vector<swarm_ranging_ping_t> all_pings;
     std::vector<std::vector<uint8_t>> ranging_status;
-    std::vector<std::vector<uint8_t>> ticks_since_status;
+    std::vector<std::vector<float>> last_status_change;
     std::vector<std::vector<float>> distance_matrix; // matrix with ranging measurements
     void update_ranging_status(const uint16_t ID_A, const uint16_t ID_B, uint8_t status);
 public:
@@ -53,32 +63,28 @@ public:
     void join(const uint16_t ID);
 
     /**
-     * Send a ping message to agents in range, including body velocity and yaw rate
+     * Send a swarm ranging ping
      */
-    void send_ping(const uint16_t sourceID, float rhoX, float rhoY, float dPsi);
+    void send_srp(const swarm_ranging_ping_t &srp);
 
     /**
-     * Initiate ranging process to receive a distance measurement
+     * Receive swarm ranging pings send in communication range
      */
-    void range_to(const uint16_t sourceID, const uint16_t destID);
+    bool receive_srp(const uint16_t receiverID, std::vector<swarm_ranging_ping_t> *srp, std::vector<float> *rssi);
     
     /**
-     * Receive a vector with all messages that originated in communication range of
-     * the receiver
-     * returns true if at least one message was received.
+     * Receive all swarm ranging pings sent in the simulation
      */
-    bool receive(const uint16_t receiverID, std::vector<ranging_message> *uwb, std::vector<float> *rssi);
-    
-    /**
-     * Receive a vector with all messages that were exchanged on the channel
-     */
-    bool receive_all(std::vector<ranging_message> *uwb);
+    bool receive_all_srp(std::vector<swarm_ranging_ping_t> *srp);
 
     /**
      * Propagate the channel, creating new measurements
      */
     void channel_update();
 
+    /**
+     * Animate uwb links
+     */
     void animation();
 };
 
