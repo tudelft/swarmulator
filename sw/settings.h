@@ -29,5 +29,5 @@
 #define MEAS_NOISE_RHOY 0.1    // stdev of measurement noise on velocity (y), in [m/s]
 #define MEAS_NOISE_DPSI 0.1  // stdev of measurement noise on yaw rate in [rad/s]
 
-#define COMMUNICATION_RANGE 20
+#define COMMUNICATION_RANGE 40
 #endif /*SETTINGS_H*/

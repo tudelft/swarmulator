@@ -56,12 +56,16 @@ private:
   float _last_cmd_seconds;
 
   // evaluation & animation
-  uint64_t _uwb_air_time_ns_now;
-  uint64_t _uwb_air_time_ns_avg;
-  float _uwb_air_utilization_now;
-  float _uwb_air_utilization_avg;
-  float _last_air_utilization_calculation;
-  float _time_air_utilization_avg;
+  // uint64_t _uwb_air_time_ns_now;
+  // uint64_t _uwb_air_time_ns_avg;
+  // float _uwb_air_utilization_now;
+  // float _uwb_air_utilization_avg;
+  // float _last_air_utilization_calculation;
+  // float _time_air_utilization_avg;
+
+  #ifdef LOG
+    FileLogger *_pFlogger;
+  #endif
 
   /**
    * @brief Construct the ekf_input of this agent

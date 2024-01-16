@@ -45,10 +45,6 @@ uwb_swarming::uwb_swarming() : Controller()
   _psirate_cmd = 0.0f;
   _avoiding_collision = false;
 
-  // _uwb_air_time_ns_avg = 0;
-  // _uwb_air_time_ns_now = 0;
-  // _last_air_utilization_calculation = 0;
-  // _time_air_utilization_avg = 0;
 }
 
 void uwb_swarming::init(const uint16_t ID)
@@ -78,6 +74,21 @@ void uwb_swarming::init(const uint16_t ID)
     _p_rel_pos_pid_y = new PID(0.5, 0.1, 0.00001);
     _p_rel_pos_pid_psi = new PID(0.5, 0.1, 0.00001);
   }
+
+  #ifdef LOG
+    std::stringstream name;
+    name << "log_drone_" << this->ID;
+    _pFlogger = new FileLogger(name.str());
+    std::stringstream header;
+    header << "time"
+           << ", ref_c1_mean, ref_c3_mean, ref_c3_max, ref_c5_mean, ref_c5_max, ref_icr_mean, ref_icr_max, ref_t_us" 
+           << ", ful_c1_mean, ful_c3_mean, ful_c3_max, ful_c5_mean, ful_c5_max, ful_icr_mean, ful_icr_max, ful_t_us" 
+           << ", bnk_c1_mean, bnk_c3_mean, bnk_c3_max, bnk_c5_mean, bnk_c5_max, bnk_icr_mean, bnk_icr_max, bnk_t_us" 
+           << ", dyn_c1_mean, dyn_c3_mean, dyn_c3_max, dyn_c5_mean, dyn_c5_max, dyn_icr_mean, dyn_icr_max, dyn_t_us" 
+           << std::endl;
+    _pFlogger->write_data(header);
+  #endif
+
 }
 
 void uwb_swarming::get_velocity_command(const uint16_t ID, float &v_x, float &psirate)
@@ -252,6 +263,21 @@ void uwb_swarming::state_estimation()
         _p_ekf[iEst]->update_performance(ids_in_comm_range_ordered, relX, relY);
       }
   }
+  #ifdef LOG
+    std::stringstream data;
+    // data << simtime_seconds << std::endl; // << ", " << _other_id << ", "
+    //      << dx_l << ", " << dy_l << ", " << dyaw << ", "
+    //      << _state[EKF_ST_X] << ", " << _state[EKF_ST_Y] << ", " << _state[EKF_ST_PSI] << ", "
+    //      << ex << ", " << ey << ", " << epsi << std::endl;
+    data << simtime_seconds
+          << std::fixed << std::setprecision(2) 
+          << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.comp_time_us 
+          << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.comp_time_us 
+          << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.comp_time_us 
+          << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.comp_time_us 
+          << std::endl;
+    _pFlogger->write_data(data);
+  #endif
 }
 
 void uwb_swarming::animation(const uint16_t ID)

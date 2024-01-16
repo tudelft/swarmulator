@@ -16,10 +16,6 @@ class SingleEKF : public RelLocEstimator
 {
 private:
     std::vector<MatrixFloat> _P;
-
-    #ifdef LOG
-    FileLogger *_pFlogger = new FileLogger("single-ekf");
-    #endif
     
     bool update_with_direct_range(const ekf_range_measurement_t &meas);
     

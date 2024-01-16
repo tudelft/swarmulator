@@ -85,13 +85,33 @@ void Environment::add_wall(float x0, float y0, float x1, float y1)
   main_mutex.unlock();
 }
 
-bool Environment::check_for_collision(const uint16_t ID, std::vector<float> s_n, std::vector<float> s, float &angle)
+bool Environment::check_for_collision(const uint16_t ID, std::vector<float> s_next, std::vector<float> s_last, float &angle)
+{
+  Point pos1, pos2, wall1, wall2;
+  pos1.y = s_last[0]; // Flip axis
+  pos1.x = s_last[1];
+  pos2.y = s_next[0];
+  pos2.x = s_next[1];
+  for (size_t i = 0; i < walls.size(); i++) {
+    wall1.x = walls[i][0];
+    wall1.y = walls[i][1];
+    wall2.x = walls[i][2];
+    wall2.y = walls[i][3];
+    if (doIntersect(pos1, pos2, wall1, wall2)) {
+      angle = atan2(wall1.y - wall2.y, wall1.x - wall2.x);
+      return true;
+    }
+  }
+  return false;
+}
+
+bool Environment::check_for_collision_soft(const uint16_t ID, std::vector<float> s_next, std::vector<float> s_last, float &angle)
 {
   Point p1, q1, p2, q2;
-  p1.y = s[0]; // Flip axis
-  p1.x = s[1];
-  q1.y = s_n[0];
-  q1.x = s_n[1];
+  p1.y = s_last[0]; // Flip axis
+  p1.x = s_last[1];
+  q1.y = s_next[0];
+  q1.x = s_next[1];
   for (size_t i = 0; i < walls.size(); i++) {
     p2.x = walls[i][0];
     p2.y = walls[i][1];
@@ -101,6 +121,10 @@ bool Environment::check_for_collision(const uint16_t ID, std::vector<float> s_n,
       angle = atan2(p2.y - q2.y, p2.x - q2.x);
       return true;
     }
+    if ((q1.x > min(p2.x,q2.x)-0.5) && (q1.x < max(p2.x,q2.x)+0.5) &&
+        (q1.y > min(p2.y,q2.y)-0.5) && (q1.y < max(p2.y,q2.y)+0.5)){
+          return true;
+        }
   }
   return false;
 }

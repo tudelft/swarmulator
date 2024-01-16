@@ -25,4 +25,7 @@ void fmat_mult(const MatrixFloat &A, const MatrixFloat &B, MatrixFloat &R);
 void fmat_add(const MatrixFloat &A, const MatrixFloat &B, MatrixFloat &R);
 
 float fmat_det(const MatrixFloat &A);
+
+float fmat_trace(const MatrixFloat &A);
+
 #endif // EKF_MATH_H

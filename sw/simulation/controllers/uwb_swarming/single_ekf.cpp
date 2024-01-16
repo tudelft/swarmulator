@@ -40,12 +40,7 @@ SingleEKF::SingleEKF(const uint16_t nagents, const uint16_t selfID, const std::s
         _P[iAgent].data[EKF_ST_PSI][EKF_ST_PSI] = STDEV_INITIAL_YAW;
     }
 
-    
-#ifdef LOG
-    std::stringstream header;
-    header << "time, selfID, otherID, dx, dy, dpsi, est_dx, est_dy, est_dpsi, e_x, e_y, e_psi" << std::endl;
-    _pFlogger->write_data(header);
-#endif
+
     
 }
 
@@ -201,14 +196,6 @@ void SingleEKF::predict(float time){
         _P[iAgent].data[EKF_ST_PSI][EKF_ST_PSI] += proc_noise_gyro * dt * dt;
     }
 
-#ifdef LOG
-    std::stringstream data;
-    data << time << ", " << _self_id << ", " << _other_id << ", "
-         << dx_l << ", " << dy_l << ", " << dyaw << ", "
-         << _state[EKF_ST_X] << ", " << _state[EKF_ST_Y] << ", " << _state[EKF_ST_PSI] << ", "
-         << ex << ", " << ey << ", " << epsi << std::endl;
-    _pFlogger->write_data(data);
-#endif
     check_state_valid();
 }
 

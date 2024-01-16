@@ -97,3 +97,15 @@ float fmat_det(const MatrixFloat &A){
     }
     return det;
 }
+
+float fmat_trace(const MatrixFloat &A){
+    float trace = 0;
+    if (A.rows != A.cols){
+        std::cout << "Couldn't compute trace: A must be square!\n";
+        return trace;
+    }
+    for (uint16_t i=0; i<A.rows; i++){
+        trace += A.data[i][i];
+    }
+    return trace;
+}
