@@ -8,9 +8,8 @@
 #include "controller.h"
 #include "randomgenerator.h"
 #include "uwb_channel.h"
+#include "rel_loc_estimator.h"
 // #include "swarm_storage.h"
-#include "full_ekf.h"
-#include "single_ekf.h"
 #include "pid.h"
 
 #include "terminalinfo.h"
@@ -48,8 +47,6 @@ private:
   // SwarmRanging _ranging;
 
   RelLocEstimator *_p_ekf[ESTIMATOR_MAX];
-  // FullEKF *_p_ekf_ref;
-  // SingleEKF *_p_ekf_single;
 
   PID * _p_rel_pos_pid_x;
   PID * _p_rel_pos_pid_y;

@@ -10,8 +10,6 @@
 #include "draw.h"
 #include "auxiliary.h"
 #include "uwb_channel.h"
-#include "full_ekf.h"
-#include "single_ekf.h"
 // #include "swarm_storage.h"
 #include "swarm_ranging.h"
 #include "pid.h"
@@ -67,11 +65,10 @@ void uwb_swarming::init(const uint16_t ID)
   if (RUN_EKF_ON_ALL_DRONES || ID == 0)
   {
     _p_ekf[ESTIMATOR_NONE] = NULL;
-    _p_ekf[ESTIMATOR_EKF_REF] = new FullEKF(nagents - 1, this->ID, false, "Ref EKF");
-    _p_ekf[ESTIMATOR_EKF_FULL] = new FullEKF(nagents - 1, this->ID, false, "Full EKF");
-    _p_ekf[ESTIMATOR_EKF_DIRECT] = new FullEKF(nagents - 1, this->ID, true, "Direct EKF");
-    _p_ekf[ESTIMATOR_EKF_SINGLE] = new SingleEKF(nagents - 1, this->ID, "Bank EKF");
-    _p_ekf[ESTIMATOR_EKF_DYNAMIC] = new FullEKF(nagents-1, this->ID, false, "Dynamic EKF");    
+    _p_ekf[ESTIMATOR_EKF_REF] = new RelLocEstimator(this->ID, nagents - 1, false, "Reference EKF");
+    _p_ekf[ESTIMATOR_EKF_FULL] = new RelLocEstimator(this->ID, nagents - 1, false, "Full EKF");
+    _p_ekf[ESTIMATOR_EKF_DYNAMIC] = new RelLocEstimator(this->ID, nagents-1, false, "Dynamic EKF");    
+    _p_ekf[ESTIMATOR_EKF_DECOUPLED] = new RelLocEstimator(this->ID, nagents - 1, true, "Decoupled EKF");
 
     _ranging_mode = RANGE_TO_CLOSEST;
   }
@@ -95,8 +92,8 @@ void uwb_swarming::init(const uint16_t ID)
     header << "time"
            << ", ref_c1_mean, ref_c3_mean, ref_c3_max, ref_c5_mean, ref_c5_max, ref_icr_mean, ref_icr_max, ref_t_us" 
            << ", ful_c1_mean, ful_c3_mean, ful_c3_max, ful_c5_mean, ful_c5_max, ful_icr_mean, ful_icr_max, ful_t_us" 
-           << ", bnk_c1_mean, bnk_c3_mean, bnk_c3_max, bnk_c5_mean, bnk_c5_max, bnk_icr_mean, bnk_icr_max, bnk_t_us" 
            << ", dyn_c1_mean, dyn_c3_mean, dyn_c3_max, dyn_c5_mean, dyn_c5_max, dyn_icr_mean, dyn_icr_max, dyn_t_us" 
+           << ", dec_c1_mean, dec_c3_mean, dec_c3_max, dec_c5_mean, dec_c5_max, dec_icr_mean, dec_icr_max, dec_t_us" 
            << std::endl;
     _pFlogger->write_data(header);
   #endif
@@ -347,8 +344,8 @@ void uwb_swarming::state_estimation()
           << std::fixed << std::setprecision(2) 
           << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.comp_time_us 
           << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.comp_time_us 
-          << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_SINGLE]->_performance.comp_time_us 
           << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.comp_time_us 
+          << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.comp_time_us 
           << std::endl;
     _pFlogger->write_data(data);
   #endif
@@ -359,21 +356,6 @@ void uwb_swarming::animation(const uint16_t ID)
   draw d;
 
   d.circle_loop(COMMUNICATION_RANGE);
-  if (this->ID == 0)
-  {
-    // _p_ekf_ref->animate();
-    // _p_ekf_single->animate();
-  }
-  // float dxg, dyg, dxl, dyl;
-
-  // for (uint i=0; i<this->connectivity_vector.size(); i++){
-  //   if (i<this->ID && this->connectivity_vector[i]==LINK_PING){
-  //     dxg = agents[i]->state[STATE_X] - agents[ID]->state[STATE_X];
-  //     dyg = agents[i]->state[STATE_Y] - agents[ID]->state[STATE_Y];
-  //     rotate_g2l_xy(dxg, dyg, agents[ID]->state[STATE_YAW], dxl, dyl);
-  //     // d.line(dxl, dyl, 1.5, orange); // orange
-  //   }
-  // }
 }
 
 void uwb_swarming::rel_loc_animation(const uint16_t agent_ID, const uint16_t estimator_ID)
