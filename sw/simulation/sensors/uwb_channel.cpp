@@ -29,7 +29,6 @@ void UltraWidebandChannel::join(const uint16_t ID){
     while (this->agent_joined.size()<=ID){
         // add new line to vectors/matrices
         this->agent_joined.push_back(false);
-        this->delivery_queues.push_back(std::vector<swarm_ranging_ping_t>());
         this->ranging_status.push_back(std::vector<uint8_t>());
         this->last_status_change.push_back(std::vector<float>());
         this->distance_matrix.push_back(std::vector<float>());
@@ -57,60 +56,25 @@ void UltraWidebandChannel::join(const uint16_t ID){
 
 void UltraWidebandChannel::send_srp(const swarm_ranging_ping_t &srp){
     uint16_t srcID = (uint16_t) srp.header_s.sourceAddress;
+    
     uwb_mutex.lock();
-    all_pings.push_back(srp);
-    for (uint i_agent=0; i_agent<delivery_queues.size(); i_agent++){
-        if (agent_joined[i_agent] && i_agent != srcID &&
-                distance_matrix[i_agent][srcID] <= this->uwb_range){
-            delivery_queues[i_agent].push_back(srp);
+    for (uint i_agent=0; i_agent<agent_joined.size(); i_agent++){
+        if (agent_joined[i_agent] && i_agent != srcID){
+            if (distance_matrix[i_agent][srcID] <= this->uwb_range){
+                float rssi_value = -this->distance_matrix[i_agent][srcID]+rg.gaussian_float(0,MEAS_NOISE_RSSI);
+                agents[i_agent]->controller->_ranging.enqueue_srp(&srp, rssi_value, true);
+                this->update_ranging_status(i_agent, srcID, RANGING_STATUS_PASSIVE);
+            } else {
+                agents[i_agent]->controller->_ranging.enqueue_srp(&srp, 0, false);
+            }
         }
     }
     uwb_mutex.unlock();
 }
 
-bool UltraWidebandChannel::receive_srp(const uint16_t receiverID, std::vector<swarm_ranging_ping_t> *srp, std::vector<float> *rssi){
-    bool message_received = false;
-    uint16_t srcID;
-    srp->clear();
-    rssi->clear();
-
-    uwb_mutex.lock();
-    for (uint16_t i=0; i<delivery_queues[receiverID].size(); i++){
-        srcID = delivery_queues[receiverID][i].header_s.sourceAddress;
-        
-        srp->push_back(delivery_queues[receiverID][i]);
-        
-        float rssi_value = -this->distance_matrix[receiverID][srcID]+rg.gaussian_float(0,MEAS_NOISE_RSSI);
-        rssi->push_back(rssi_value);
-        assert_rssi_valid_uwb(rssi_value);
-
-        message_received = true;
-        this->update_ranging_status(receiverID, srcID, RANGING_STATUS_PASSIVE);
-    
-    }
-    delivery_queues[receiverID].clear();
-    uwb_mutex.unlock();
-    return message_received;
-}
-
-
-bool UltraWidebandChannel::receive_all_srp(std::vector<swarm_ranging_ping_t> *srp){
-    bool message_received = false;
-    srp->clear();
-    uwb_mutex.lock_shared();
-    for (uint16_t i=0; i<this->all_pings.size();i++){
-        srp->push_back(this->all_pings[i]);
-        message_received = true;
-    }
-    uwb_mutex.unlock_shared();
-    return message_received;
-}
-
 
 void UltraWidebandChannel::channel_update(){
     uwb_mutex.lock();
-
-    this->all_pings.clear();
 
     float dist;
     main_mutex.lock_shared();

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <stdint.h>
 #include "omniscient_observer.h"
+#include "swarm_ranging.h"
 
 /**
  * This is a parent class for a controller.
@@ -39,6 +40,7 @@ public:
   bool moving; // Internal state of whether the robot is actively moving or not
   bool happy;
   float sensor_range_max;
+  SwarmRanging _ranging;
 
   virtual void init(const uint16_t ID);
 

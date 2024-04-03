@@ -3,12 +3,13 @@
 
 #include <stdint.h>
 #include <vector>
+#include <shared_mutex>
 
 #include "randomgenerator.h"
 #include "ekf_types.h"
 
 #define MAX_AGENTS_IN_PING 9
-#define SRP_SIZE_BITS(n_agents) (288 + n_agents*80)
+#define SRP_SIZE_BITS(n_agents) (272 + n_agents*80)
 
 #define TX_HISTORY_LEN 10
 
@@ -40,11 +41,11 @@ typedef struct uwb_time_s
  * Definition of the swarm ranging ping, exchanged via UWB:
  *  Header..............................(21 Bytes)
  *  Number of Agent blocks in the ping..(1 Byte)
- *  Last Sender (source) Information....(14 Bytes)
+ *  Last Sender (source) Information....(12 Bytes)
  *  Last Agent Information Block........(10 Bytes each)
  * 
- * Total Size: 36 + 10N Bytes
- * Max Size (9 agent blocks): 126 Bytes
+ * Total Size: 34 + 10N Bytes
+ * Max Size (9 agent blocks): 124 Bytes
 */
 
 typedef struct srp_source_block_s
@@ -52,7 +53,6 @@ typedef struct srp_source_block_s
   uint8_t seq;
   uint8_t last_tx[5];
   int16_t velocities[3]; // in mm/s
-  int16_t yawrate;       // in mrad/s
 } srp_source_block_t;
 
 typedef struct srp_agent_block_s
@@ -117,7 +117,7 @@ public:
 
   void add_message_by_payload(uint16_t payload_bits);
 
-  void calculate_load();
+  void calculate_load(const float time);
 
 };
 
@@ -134,10 +134,16 @@ private:
   uint16_t _self_id;
   uwb_time_t _tx_history[TX_HISTORY_LEN];
   uint8_t _seq_history[TX_HISTORY_LEN];
+  std::shared_mutex _srp_buffer_mutex;
 
   std::vector<ranging_table_t> _agents;
-  std::vector<ekf_range_measurement_t> _range_measurements;
+  std::vector<ekf_input_t> _input_buffer;
+  std::vector<ekf_range_measurement_t> _direct_range_buffer;
+  std::vector<ekf_range_measurement_t> _secondary_range_buffer;
   std::vector<ekf_range_measurement_t> _animation_buffer;
+  std::vector<swarm_ranging_ping_t> _srp_buffer;
+  std::vector<float> _rssi_buffer;
+  std::vector<swarm_ranging_ping_t> _srp_buffer_not_in_range;
 
   void order_by_rssi();
 
@@ -146,13 +152,13 @@ private:
   /**
    * Process a swarm ranging ping
    */
-  void process_ranging_ping(uwb_time_t &rx_time, const swarm_ranging_ping_t &msg, float rssi, std::vector<ekf_input_t> &inputs);
+  void process_ranging_ping(uwb_time_t &rx_time, const swarm_ranging_ping_t &msg, float rssi, std::vector<ekf_input_t> &inputs, const float time);
 
   /**
    * Calculate direct ranges from available timestamps in the 
    * ranging tables, and enqueues them in the _range_measurements vector
    */
-  void calculate_direct_ranges();
+  void calculate_direct_ranges(const float time);
 
  /**
    * Set tx time of previously transmitted ping based on seq number
@@ -195,12 +201,18 @@ public:
    */
   void init(const uint16_t ID);
 
-  void send_ranging_ping(float rhoX, float rhoY, float dPsi);
+  void send_ranging_ping(float vx, float vy);
 
-  void receive_new_ranging(std::vector<ekf_range_measurement_t> &ranges, std::vector<ekf_input_t> &inputs);
+  void process_incoming_data(const float time_now);
 
-  void receive_all_ranging(std::vector<ekf_range_measurement_t> &ranges, std::vector<ekf_input_t> &inputs);
-  
+  // Call 'process_incoming_data()' before extracting measurements
+  void get_new_ranging(std::vector<ekf_range_measurement_t> &ranges, std::vector<ekf_input_t> &inputs);
+
+  // Call 'process_incoming_data()' before extracting measurements
+  void get_all_ranging(std::vector<ekf_range_measurement_t> &ranges, std::vector<ekf_input_t> &inputs, const float time);
+
+  void enqueue_srp(const swarm_ranging_ping_t* srp, float rssi, bool in_range);
+
   void rel_loc_animation(const uint16_t ID);
 
 };

@@ -110,7 +110,7 @@ public:
   /**
   * Draw a small white point
   */
-  void point();
+  void point(const float &scl, const color3ub &color);
 
   /**
    * Draw relevant simulation data in the bottom left corner (like the time of simulation)
@@ -130,6 +130,7 @@ public:
    * @param ID The ID of the robot in question
    */
   void agent_number(const uint16_t &ID);
+  void agent_number_with_text(const uint16_t &ID, const std::stringstream &text);
 
   /**
    * Draw the agent (uses internal function defined by the agent class)
@@ -165,6 +166,7 @@ public:
   void food(const float &x, const float &y);
 
   void estimate(const uint16_t &ID, const float &rel_x, const float &rel_y, const float &rel_psi);
+  void estimate_with_cov(const uint16_t &ID, const float &rel_x, const float &rel_y, const float &rel_psi, const float &cov_x, const float &cov_y);
 
 };
 

@@ -13,13 +13,12 @@
 #include "log.h"
 
 #define DEBUG_STATE_CHECK
+#define AGENT_TIMEOUT_MIN 2 // earliest time after which an agent is discarded [s]
 
 // static float stdev_initial_pos_xy = 100;
 // static float stdev_initial_yaw = 3;
 
-static float proc_noise_velXY = MEAS_NOISE_RHOX;
-static float proc_noise_gyro = MEAS_NOISE_DPSI;
-
+static float proc_noise_velXY = MEAS_NOISE_VX;
 static float meas_noise_uwb = MEAS_NOISE_UWB;
 
 SingleEKF::SingleEKF(const uint16_t nagents, const uint16_t selfID, const std::string name) 
@@ -32,16 +31,19 @@ SingleEKF::SingleEKF(const uint16_t nagents, const uint16_t selfID, const std::s
             id++;
         }
 
-        _ids[iAgent] = id;
+        _ids[iAgent] = _self_id; // means no agent
         _P.push_back(MatrixFloat(EKF_ST_DIM, EKF_ST_DIM));
 
         _P[iAgent].data[EKF_ST_X][EKF_ST_X] = STDEV_INITIAL_POS_XY;
+        _P[iAgent].data[EKF_ST_X][EKF_ST_Y] = 0;
+        _P[iAgent].data[EKF_ST_Y][EKF_ST_X] = 0;
         _P[iAgent].data[EKF_ST_Y][EKF_ST_Y] = STDEV_INITIAL_POS_XY;
-        _P[iAgent].data[EKF_ST_PSI][EKF_ST_PSI] = STDEV_INITIAL_YAW;
+        
+        _state[iAgent][STATE_X] = 0;
+        _state[iAgent][STATE_Y] = 0;
     }
 
-
-    
+    _ag_init = new AgentInitializer(_self_id);    
 }
 
 #ifdef DEBUG_STATE_CHECK
@@ -50,21 +52,14 @@ void SingleEKF::check_state_valid(){
 
         if (isnan(_state[iAgent][EKF_ST_X]) ||
             isnan(_state[iAgent][EKF_ST_Y]) ||
-            isnan(_state[iAgent][EKF_ST_PSI]) ||
             isinf(_state[iAgent][EKF_ST_X]) ||
-            isinf(_state[iAgent][EKF_ST_Y]) ||
-            isinf(_state[iAgent][EKF_ST_PSI])){
+            isinf(_state[iAgent][EKF_ST_Y])){
                 throw std::runtime_error("Invalid state encoutered");
             }
         if (isnan(_P[iAgent].data[EKF_ST_X][EKF_ST_X]) ||
             isnan(_P[iAgent].data[EKF_ST_X][EKF_ST_Y]) ||
-            isnan(_P[iAgent].data[EKF_ST_X][EKF_ST_PSI]) ||
             isnan(_P[iAgent].data[EKF_ST_Y][EKF_ST_X]) ||
-            isnan(_P[iAgent].data[EKF_ST_Y][EKF_ST_Y]) ||
-            isnan(_P[iAgent].data[EKF_ST_Y][EKF_ST_PSI]) ||
-            isnan(_P[iAgent].data[EKF_ST_PSI][EKF_ST_X]) ||
-            isnan(_P[iAgent].data[EKF_ST_PSI][EKF_ST_Y]) ||
-            isnan(_P[iAgent].data[EKF_ST_PSI][EKF_ST_PSI])){
+            isnan(_P[iAgent].data[EKF_ST_Y][EKF_ST_Y])){
                 throw std::runtime_error("Invalid covariance encountered");
             }
     }
@@ -75,23 +70,105 @@ void SingleEKF::check_state_valid(){
 }
 #endif
 
+bool SingleEKF::add_agent(const uint16_t agent_id, const float agent_rssi, const float x0, const float y0, const float var_x, const float var_y, uint16_t *idx){
+    // Check if agent is already in
+    if (get_index(agent_id, idx)){
+        return false;
+    }
+    // Find best index to add: empty > last_seen > rssi
+    bool index_found = false;
+    uint16_t best_idx = 0;
+    float best_last_seen = 0;
+    float best_rssi = agent_rssi; 
+    for (uint16_t iIdx=0; iIdx < _ids.size(); iIdx++){
+        if (_ids[iIdx] == _self_id){
+            // empty location > best case
+            best_idx = iIdx;
+            index_found = true;
+            break;
+        }
+        if (_last_seen[iIdx]-simtime_seconds>AGENT_TIMEOUT_MIN || _last_seen[iIdx]<best_last_seen){
+            // an agent hasn't been seen in a while > also good
+            best_idx = iIdx;
+            best_last_seen = _last_seen[iIdx];
+            index_found = true;
+            continue;
+        }
+        if (best_last_seen == 0 && _rssi[iIdx]<best_rssi && _rssi[iIdx] < 1.1*agent_rssi){
+            // require at least 5% lower rssi for a change (hysteresis)
+            best_idx = iIdx;
+            best_rssi = _rssi[iIdx];
+            index_found = true;
+        }
+    }
+
+    if (index_found){
+        // add agent
+        //std::cout << _name << " " << _self_id << ": Swapped agent at idx " << best_idx
+        //          << ": " << _ids[best_idx] << ">" << agent_id << std::endl;
+        *idx = best_idx;
+        _ids[best_idx] = agent_id;
+        // TODO better state initialization (e.g. based on closest other agent?)
+        // e.g. if we receive a direct message, check if there is a distance to another agent in there
+        // atm initialize other agent in front at a distance based on message (most likely place to appear)
+        
+        // float range = -agent_rssi; // placeholder for a real case where rssi != -range
+        // float norm_v = sqrtf(powf(rel_vx, 2) + powf(rel_vy, 2));
+
+        // _state[best_idx][EKF_ST_X] = - range * (rel_vx/norm_v);
+        // _state[best_idx][EKF_ST_Y] = - range * (rel_vy/norm_v);
+        _state[best_idx][EKF_ST_X] = x0;
+        _state[best_idx][EKF_ST_Y] = y0;
+       
+        _input[best_idx][EKF_IN_VX] = 0;
+        _input[best_idx][EKF_IN_VY] = 0;
+        
+        for (uint16_t iRow=0; iRow<EKF_ST_DIM; iRow++){
+            for (uint16_t iCol=0; iCol<EKF_ST_DIM; iCol++){
+                _P[best_idx].data[iRow][iCol] = 0;
+            }
+        }
+
+        _P[best_idx].data[EKF_ST_X][EKF_ST_X] = var_x;
+        _P[best_idx].data[EKF_ST_Y][EKF_ST_Y] = var_y;
+
+        std::cout << _name << _self_id << ": Added Ag" << agent_id
+                    << " at (" << x0 << "," << y0 << ") - variance ("
+                        << var_x << "," << var_y << ")" <<std::endl;
+        return true;
+    } else {
+        return false;
+    }
+}
 
 void SingleEKF::step(const float time, ekf_input_t &self_input){
     auto start = std::chrono::high_resolution_clock::now();
     // add own input
-    _self_input[EKF_IN_PX] = self_input.rhoX;
-    _self_input[EKF_IN_PY] = self_input.rhoY;
-    _self_input[EKF_IN_DPSI] = self_input.dPsi;
+    _self_input[EKF_IN_VX] = self_input.vx;
+    _self_input[EKF_IN_VY] = self_input.vy;
 
     // add other agent's input
     uint16_t idx;
     for (uint16_t iInput=0; iInput<_input_queue.size(); iInput++){
         if (get_index(_input_queue[iInput].id, &idx)){
-            _input[idx][EKF_IN_PX] = _input_queue[iInput].rhoX;
-            _input[idx][EKF_IN_PY] = _input_queue[iInput].rhoY;
-            _input[idx][EKF_IN_DPSI] = _input_queue[iInput].dPsi;
+            _input[idx][EKF_IN_VX] = _input_queue[iInput].vx;
+            _input[idx][EKF_IN_VY] = _input_queue[iInput].vy;
+            _rssi[idx] = _input_queue[iInput].rssi;
+            _last_seen[idx] = _input_queue[iInput].timestamp;
         } else {
-            std::cout << "SingleEKF: Couldn't add input for agent" << _input_queue[iInput].id << std::endl;
+            // agent not yet in state space
+            float x0, y0, var_x, var_y;
+            // _ag_init->add_velocities(_input_queue[iInput].id, _input_queue[iInput].vx, _input_queue[iInput].vy);
+            if (_ag_init->get_initial_position(_input_queue[iInput].id, time, &x0, &y0, &var_x, &var_y)){
+                if(add_agent(_input_queue[iInput].id, _input_queue[iInput].rssi, x0, y0, var_x, var_y, &idx)){
+                    _input[idx][EKF_IN_VX] = _input_queue[iInput].vx;
+                    _input[idx][EKF_IN_VY] = _input_queue[iInput].vy;
+                    _rssi[idx] = _input_queue[iInput].rssi;
+                    _last_seen[idx] = _input_queue[iInput].timestamp;
+                }
+            } else {
+                _ag_init->add_velocities(_input_queue[iInput].id, _input_queue[iInput].vx, _input_queue[iInput].vy, _input_queue[iInput].timestamp);
+            }
         }
     }
     _input_queue.clear();
@@ -104,7 +181,13 @@ void SingleEKF::step(const float time, ekf_input_t &self_input){
         if (_range_queue[iMeas].id_A == _self_id){
             // std::cout << "Measurement Processed" << std::endl;
             update_with_direct_range(_range_queue[iMeas]);
-        } 
+        } else if (_range_queue[iMeas].id_B == _self_id) {
+            _range_queue[iMeas].id_B = _range_queue[iMeas].id_A;
+            _range_queue[iMeas].id_A = _self_id;
+            update_with_direct_range(_range_queue[iMeas]);
+        } else {
+            continue;
+        }
     }
     _range_queue.clear();
 
@@ -112,6 +195,11 @@ void SingleEKF::step(const float time, ekf_input_t &self_input){
     auto stop = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop-start);
     _performance.comp_time_us = duration.count();
+
+    for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
+        _cov[iAgent][EKF_ST_X] = _P[iAgent].data[EKF_ST_X][EKF_ST_X];
+        _cov[iAgent][EKF_ST_Y] = _P[iAgent].data[EKF_ST_Y][EKF_ST_Y];
+    }
 
     // // update the agent's state
     // for (uint16_t iAgent=0; iAgent<agent_data.size(); iAgent++){
@@ -130,70 +218,25 @@ void SingleEKF::predict(float time){
 
     // Agent specific updates
     float d_state[EKF_ST_DIM];
-    float sPsi, cPsi;
-    MatrixFloat tmpSS1 (EKF_ST_DIM, EKF_ST_DIM);
-    MatrixFloat tmpSS2 (EKF_ST_DIM, EKF_ST_DIM);
 
     for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
-        sPsi = std::sin(_state[iAgent][EKF_ST_PSI]);
-        cPsi = std::cos(_state[iAgent][EKF_ST_PSI]);
-
-        // Prediction Jacobian
-        MatrixFloat A (EKF_ST_DIM, EKF_ST_DIM);
-        A.data[EKF_ST_X][EKF_ST_X] = 1.0f;
-        A.data[EKF_ST_X][EKF_ST_Y] = dt*_self_input[EKF_IN_DPSI];
-        A.data[EKF_ST_X][EKF_ST_PSI] = dt*(-sPsi*_input[iAgent][EKF_IN_PX] - cPsi*_input[iAgent][EKF_IN_PY]);
-
-        A.data[EKF_ST_Y][EKF_ST_X] = -dt*_self_input[EKF_IN_DPSI];
-        A.data[EKF_ST_Y][EKF_ST_Y] = 1.0f;
-        A.data[EKF_ST_Y][EKF_ST_PSI] = dt*(cPsi*_input[iAgent][EKF_IN_PX] - sPsi*_input[iAgent][EKF_IN_PY]);
+        // Prediction Jacobian A = Identity
         
-        A.data[EKF_ST_PSI][EKF_ST_X] = 0.0f;
-        A.data[EKF_ST_PSI][EKF_ST_Y] = 0.0f;
-        A.data[EKF_ST_PSI][EKF_ST_PSI] = 1.0f;
-        
-
-        // Input Matrix
-        // MatrixFloat B (EKF_ST_DIM, EKF_IN_DIM);
-        // B.data[EKF_ST_X][EKF_IN_PX] = dt*cPsi;
-        // B.data[EKF_ST_X][EKF_IN_PY] = -dt*sPsi;
-        // B.data[EKF_ST_X][EKF_IN_DPSI] = 0.0f;
-
-        // B.data[EKF_ST_Y][EKF_IN_PX] = dt*sPsi;
-        // B.data[EKF_ST_Y][EKF_IN_PY] = dt*cPsi;
-        // B.data[EKF_ST_Y][EKF_IN_DPSI] = 0.0f;
-
-        // B.data[EKF_ST_PSI][EKF_IN_PX] = 0.0f;
-        // B.data[EKF_ST_PSI][EKF_IN_PY] = 0.0f;
-        // B.data[EKF_ST_PSI][EKF_IN_DPSI] = dt;
-
-
         // state change
-        d_state[EKF_ST_X] = cPsi*_input[iAgent][EKF_IN_PX] - sPsi*_input[iAgent][EKF_IN_PY] - _self_input[EKF_IN_PX]
-                            + _self_input[EKF_IN_DPSI]*_state[iAgent][EKF_ST_Y];
-        d_state[EKF_ST_Y] = sPsi*_input[iAgent][EKF_IN_PX] + cPsi*_input[iAgent][EKF_IN_PY] - _self_input[EKF_IN_PY]
-                            - _self_input[EKF_IN_DPSI]*_state[iAgent][EKF_ST_X];
-        d_state[EKF_ST_PSI] = _input[iAgent][EKF_IN_DPSI] - _self_input[EKF_IN_DPSI]; 
+        d_state[EKF_ST_X] = _input[iAgent][EKF_IN_VX] - _self_input[EKF_IN_VX];
+        d_state[EKF_ST_Y] = _input[iAgent][EKF_IN_VY] - _self_input[EKF_IN_VY];
     
         _state[iAgent][EKF_ST_X] += dt * d_state[EKF_ST_X];
         _state[iAgent][EKF_ST_Y] += dt * d_state[EKF_ST_Y];
-        _state[iAgent][EKF_ST_PSI] += dt * d_state[EKF_ST_PSI];
-        wrapTo2Pi(_state[iAgent][EKF_ST_PSI]);
 
         // Propagate Covariance
-        fmat_mult(A, _P[iAgent], tmpSS1);   // Ai*Pij
-        fmat_trans(A, tmpSS2);       // Aj^T
-        fmat_mult(tmpSS1, tmpSS2, _P[iAgent]);             // Ai*Pij*Aj^T
-
         // Add own process noise
         _P[iAgent].data[EKF_ST_X][EKF_ST_X] += proc_noise_velXY * dt * dt;
         _P[iAgent].data[EKF_ST_Y][EKF_ST_Y] += proc_noise_velXY * dt * dt;
-        _P[iAgent].data[EKF_ST_PSI][EKF_ST_PSI] += proc_noise_gyro * dt * dt;
         
         // Add other agent process noise
         _P[iAgent].data[EKF_ST_X][EKF_ST_X] += proc_noise_velXY * dt * dt;
         _P[iAgent].data[EKF_ST_Y][EKF_ST_Y] += proc_noise_velXY * dt * dt;
-        _P[iAgent].data[EKF_ST_PSI][EKF_ST_PSI] += proc_noise_gyro * dt * dt;
     }
 
     check_state_valid();
@@ -216,7 +259,6 @@ bool SingleEKF::update_with_direct_range(const ekf_range_measurement_t &meas){
         MatrixFloat HT(EKF_ST_DIM, 1);
         HT.data[EKF_ST_X][0] = _state[idx_i][EKF_ST_X]/pred;
         HT.data[EKF_ST_Y][0] = _state[idx_i][EKF_ST_Y]/pred;
-        HT.data[EKF_ST_PSI][0] = 0;
 
         MatrixFloat PHT(EKF_ST_DIM, 1);
         fmat_mult(_P[idx_i], HT, PHT);            
@@ -241,6 +283,9 @@ bool SingleEKF::update_with_direct_range(const ekf_range_measurement_t &meas){
         }
         check_state_valid();
         success = true;
+    } else {
+        // agent not yet in state space
+        _ag_init->add_range(meas.id_B, meas.range, meas.timestamp);
     }
     return success;
 }

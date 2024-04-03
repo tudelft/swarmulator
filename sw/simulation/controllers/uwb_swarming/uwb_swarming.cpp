@@ -28,18 +28,28 @@
 
 #define RUN_EKF_ON_ALL_DRONES 1
 
-#define DESIRED_REL_X 1.5f
-#define DESIRED_REL_Y 0.8f
-#define DESIRED_REL_PSI 0.0f
+#define V_MAX 1.0f // m/s
+#define V_RAMPUP_TIME 1.0f // s
+
+// Initialization: smaller movement with frequent direction changes for better initialization
+#define INITIALIZATION_TIME 30 // [s]
+#define INITIALIZATION_SIZE 2.0f // movement size [m]
+
+
+// #define DESIRED_REL_X 1.5f
+// #define DESIRED_REL_Y 0.8f
+// #define DESIRED_REL_PSI 0.0f
 
 uwb_swarming::uwb_swarming() : Controller()
 {
   set_max_sensor_range(SENSOR_MAX_RANGE);
   _last_velocity_update = 0;
-  _last_ping_tx_seconds = 0;
+  _next_ping_tx_seconds = BASE_RANGING_PING_INTERVAL + rg.uniform_float(-BASE_RANGING_PING_INTERVAL / 10, BASE_RANGING_PING_INTERVAL / 10);
   _last_ekf_seconds = 0;
-  _current_vx = 0;
-  _current_vy = 0;
+  _current_target_x = 0;
+  _current_target_y = 0;
+  _total_distance_to_target = 0;
+  _current_ideal_speed = 0;
   _vel_cmd[0] = 0.0f;
   _vel_cmd[1] = 0.0f;
   _psirate_cmd = 0.0f;
@@ -50,16 +60,18 @@ uwb_swarming::uwb_swarming() : Controller()
 void uwb_swarming::init(const uint16_t ID)
 {
   this->ID = ID;
+
   // _swarm.init(ID);
   _ranging.init(ID);
 
   if (RUN_EKF_ON_ALL_DRONES || ID == 0)
   {
     _p_ekf[ESTIMATOR_NONE] = NULL;
-    _p_ekf[ESTIMATOR_EKF_REF] = new FullEKF(nagents - 1, this->ID, "Ref EKF");
-    _p_ekf[ESTIMATOR_EKF_FULL] = new FullEKF(nagents - 1, this->ID, "Full EKF");
+    _p_ekf[ESTIMATOR_EKF_REF] = new FullEKF(nagents - 1, this->ID, false, "Ref EKF");
+    _p_ekf[ESTIMATOR_EKF_FULL] = new FullEKF(nagents - 1, this->ID, false, "Full EKF");
+    _p_ekf[ESTIMATOR_EKF_DIRECT] = new FullEKF(nagents - 1, this->ID, true, "Direct EKF");
     _p_ekf[ESTIMATOR_EKF_SINGLE] = new SingleEKF(nagents - 1, this->ID, "Bank EKF");
-    _p_ekf[ESTIMATOR_EKF_DYNAMIC] = new FullEKF(3, this->ID, "Dynamic EKF");    
+    _p_ekf[ESTIMATOR_EKF_DYNAMIC] = new FullEKF(nagents-1, this->ID, false, "Dynamic EKF");    
 
     _ranging_mode = RANGE_TO_CLOSEST;
   }
@@ -91,50 +103,114 @@ void uwb_swarming::init(const uint16_t ID)
 
 }
 
-void uwb_swarming::get_velocity_command(const uint16_t ID, float &v_x, float &psirate)
-{
-  state_estimation();
+// // velocity command random walk fixed wing
+// void uwb_swarming::get_velocity_command(const uint16_t ID, float &v_x, float &psirate)
+// {
+//  // since the simulation time runs on a different thread, to make sure all estimators
+//  // use the same reference time we avoid using simtime_seconds inside the controller
+//  _ref_time = simtime_seconds;
+//   state_estimation();
 
-  if (simtime_seconds >= _last_cmd_seconds + 10 * CMD_INTERVAL)
-  {
-    _vel_cmd[0] = 0.5;
-    _psirate_cmd = rg.uniform_float(-0.3 * M_PI, 0.3 * M_PI);
-    _last_cmd_seconds = simtime_seconds;
+//   if (_ref_time >= _last_cmd_seconds + 10 * CMD_INTERVAL)
+//   {
+//     _vel_cmd[0] = 0.5;
+//     _psirate_cmd = rg.uniform_float(-0.3 * M_PI, 0.3 * M_PI);
+//     _last_cmd_seconds = _ref_time;
+//   }
+
+//   v_x = _vel_cmd[0];
+//   psirate = _psirate_cmd;
+//   wall_avoidance_turn(ID, v_x, psirate, SENSOR_MAX_RANGE);
+// }
+
+// velocity command go to random points with fixed yaw
+void uwb_swarming::get_velocity_command(const uint16_t ID, float &v_x, float &v_y)
+{
+  // since the simulation time runs on a different thread, to make sure all estimators
+  // use the same reference time we avoid using simtime_seconds inside the controller
+  _ref_time = simtime_seconds;
+  state_estimation();
+  
+  float delta_x = _current_target_x - agents[ID]->state[STATE_X];
+  float delta_y = _current_target_y - agents[ID]->state[STATE_Y];
+  float distance_to_target = sqrtf(powf(delta_x, 2.0f)+powf(delta_y, 2.0f));
+
+  // check if target is reached
+  if (distance_to_target < 0.1 || _total_distance_to_target < 0.1){
+    float env_lim = environment.limits();
+    if (_ref_time<INITIALIZATION_TIME){
+      // during initialization, change movement more often
+      float x_now = agents[ID]->state[STATE_X];
+      float y_now = agents[ID]->state[STATE_Y];
+      
+      _current_target_x = rg.uniform_float(x_now-INITIALIZATION_SIZE, x_now+INITIALIZATION_SIZE);
+      _current_target_x = std::max(-env_lim, std::min(_current_target_x, env_lim));
+      
+      _current_target_y = rg.uniform_float(y_now-INITIALIZATION_SIZE, y_now+INITIALIZATION_SIZE);
+      _current_target_y = std::max(-env_lim, std::min(_current_target_y, env_lim));
+    } else{
+      _current_target_x = rg.uniform_float(-env_lim, env_lim);
+      _current_target_y = rg.uniform_float(-env_lim, env_lim);
+    }
+
+    // std::cout << "Ag" << ID << ": New target (" << _current_target_x << "," << _current_target_y << ")" << std::endl;
+    delta_x = _current_target_x - agents[ID]->state[STATE_X];
+    delta_y = _current_target_y - agents[ID]->state[STATE_Y];
+    distance_to_target = sqrtf(powf(delta_x, 2.0f)+powf(delta_y, 2.0f));
+    _total_distance_to_target = distance_to_target;
+    _current_ideal_speed = 0;
   }
 
+  float dt = _ref_time-_last_cmd_seconds;  
+  _last_cmd_seconds = _ref_time;
+  if (distance_to_target < _total_distance_to_target/2){
+    _current_ideal_speed += (V_MAX/V_RAMPUP_TIME)*dt;
+  } else {
+    _current_ideal_speed -= (V_MAX/V_RAMPUP_TIME)*dt;
+  }
+
+  _vel_cmd[0] = std::max(_current_ideal_speed, V_MAX) * delta_x/distance_to_target;
+  _vel_cmd[1] = std::max(_current_ideal_speed, V_MAX) * delta_y/distance_to_target;
+
   v_x = _vel_cmd[0];
-  psirate = _psirate_cmd;
-  wall_avoidance_turn(ID, v_x, psirate, SENSOR_MAX_RANGE);
+  v_y = _vel_cmd[1];
+  // could add some wall avoidance here, but not needed if square room with no obstacles
+  // psirate = 0;
+  // wall_avoidance_turn(ID, v_x, psirate, SENSOR_MAX_RANGE);
 }
+
 /*
 void uwb_swarming::get_velocity_command(const uint16_t ID, float &v_x, float &v_y, float &dpsi)
 {
+  // since the simulation time runs on a different thread, to make sure all estimators
+  // use the same reference time we avoid using simtime_seconds inside the controller
+  _ref_time = simtime_seconds;
   state_estimation();
 
-  if (simtime_seconds < 60)
+  if (_ref_time < 60)
   {
     // initialization
-    if (_avoiding_collision || simtime_seconds >= _last_cmd_seconds + 10 * CMD_INTERVAL)
+    if (_avoiding_collision || _ref_time >= _last_cmd_seconds + 10 * CMD_INTERVAL)
     {
       _vel_cmd[0] = rg.uniform_float(-1, 1);
       _vel_cmd[1] = rg.uniform_float(-1, 1);
       _psirate_cmd = 0.0f;
-      _last_cmd_seconds = simtime_seconds;
+      _last_cmd_seconds = _ref_time;
     }
   }
   else
   {
     // leader
-    if (ID == 0 && (_avoiding_collision || simtime_seconds >= _last_cmd_seconds + 20 * CMD_INTERVAL))
+    if (ID == 0 && (_avoiding_collision || _ref_time >= _last_cmd_seconds + 20 * CMD_INTERVAL))
     {
       _vel_cmd[0] = 0.5;
       _vel_cmd[1] = 0; // rg.uniform_float(-1, 1);
       _psirate_cmd = rg.uniform_float(-0.2 * M_PI, 0.2 * M_PI);
-      _last_cmd_seconds = simtime_seconds;
+      _last_cmd_seconds = _ref_time;
     }
 
     // follower
-    if (ID != 0 && (_avoiding_collision || simtime_seconds >= _last_cmd_seconds + CMD_INTERVAL))
+    if (ID != 0 && (_avoiding_collision || _ref_time >= _last_cmd_seconds + CMD_INTERVAL))
     {
       // errors in leader frame
       float el_x, el_y;
@@ -157,7 +233,7 @@ void uwb_swarming::get_velocity_command(const uint16_t ID, float &v_x, float &v_
       _vel_cmd[0] = _p_rel_pos_pid_x->step(e_x, CMD_INTERVAL);
       _vel_cmd[1] = _p_rel_pos_pid_y->step(e_y, CMD_INTERVAL);
       _psirate_cmd = _p_rel_pos_pid_psi->step(e_psi, CMD_INTERVAL);
-      _last_cmd_seconds = simtime_seconds;
+      _last_cmd_seconds = _ref_time;
     }
   }
 
@@ -172,13 +248,11 @@ void uwb_swarming::get_own_input(ekf_input_t &own_input)
 {
   float vx = agents[this->ID]->state[STATE_VX];
   float vy = agents[this->ID]->state[STATE_VY];
-  float yaw = agents[this->ID]->state[STATE_YAW];
-  rotate_g2l_xy(vx, vy, yaw, own_input.rhoX, own_input.rhoY);
-
+  
   own_input.id = this->ID;
-  own_input.rhoX += this->rg.gaussian_float(0, MEAS_NOISE_RHOX);
-  own_input.rhoY += this->rg.gaussian_float(0, MEAS_NOISE_RHOY);
-  own_input.dPsi = agents[this->ID]->state[STATE_YAWRATE] + this->rg.gaussian_float(0, MEAS_NOISE_DPSI);
+  own_input.vx = vx + this->rg.gaussian_float(0, MEAS_NOISE_VX);
+  own_input.vy = vy + this->rg.gaussian_float(0, MEAS_NOISE_VY);
+  own_input.timestamp = _ref_time;
 }
 
 void uwb_swarming::state_estimation()
@@ -186,19 +260,20 @@ void uwb_swarming::state_estimation()
   ekf_input_t own_input;
   get_own_input(own_input);
 
-  if (simtime_seconds >= _last_ping_tx_seconds + BASE_RANGING_PING_INTERVAL)
+  if (_ref_time >= _next_ping_tx_seconds)
   {
-    _ranging.send_ranging_ping(own_input.rhoX, own_input.rhoY, own_input.dPsi);
-    _last_ping_tx_seconds = simtime_seconds + rg.uniform_float(-BASE_RANGING_PING_INTERVAL / 10, BASE_RANGING_PING_INTERVAL / 10);
+    _ranging.send_ranging_ping(own_input.vx, own_input.vy);
+    _next_ping_tx_seconds = _ref_time + BASE_RANGING_PING_INTERVAL + rg.uniform_float(-BASE_RANGING_PING_INTERVAL / 10, BASE_RANGING_PING_INTERVAL / 10);
   }
+  _ranging.process_incoming_data(_ref_time);
 
   std::vector<ekf_range_measurement_t> measurements;
   std::vector<ekf_input_t> inputs;
-  _ranging.receive_new_ranging(measurements, inputs);
+  _ranging.get_new_ranging(measurements, inputs);
 
   std::vector<ekf_range_measurement_t> all_measurements;
   std::vector<ekf_input_t> all_inputs;
-  _ranging.receive_all_ranging(all_measurements, all_inputs);
+  _ranging.get_all_ranging(all_measurements, all_inputs, _ref_time);
 
   if (RUN_EKF_ON_ALL_DRONES || ID == 0)
   {
@@ -210,19 +285,19 @@ void uwb_swarming::state_estimation()
       } else if (iEst == ESTIMATOR_EKF_REF){
         _p_ekf[ESTIMATOR_EKF_REF]->enqueue_inputs(all_inputs);
         _p_ekf[ESTIMATOR_EKF_REF]->enqueue_ranges(all_measurements);
-        _p_ekf[ESTIMATOR_EKF_REF]->step(simtime_seconds, own_input);
+        _p_ekf[ESTIMATOR_EKF_REF]->step(_ref_time, own_input);
       }
       else
       {
         _p_ekf[iEst]->enqueue_inputs(inputs);
         _p_ekf[iEst]->enqueue_ranges(measurements);
-        _p_ekf[iEst]->step(simtime_seconds, own_input);
+        _p_ekf[iEst]->step(_ref_time, own_input);
       }
     }
   }
 
   // Calculate performance indicators
-  _ranging._evaluator.calculate_load();
+  _ranging._evaluator.calculate_load(_ref_time);
 
   std::vector<uint16_t> ids_in_comm_range_ordered;
   std::vector<float> relX;
@@ -230,7 +305,7 @@ void uwb_swarming::state_estimation()
   std::vector<float> range;
   std::vector<float>::iterator it;
   uint16_t idx;
-  float dx_g, dy_g, dx_l, dy_l, range_tmp;
+  float dx_g, dy_g, range_tmp;
 
   for (uint16_t iAgent = 0; iAgent<nagents; iAgent++){
     if (iAgent == this->ID){
@@ -247,9 +322,8 @@ void uwb_swarming::state_estimation()
         range.insert(it, range_tmp);
         ids_in_comm_range_ordered.insert(ids_in_comm_range_ordered.begin()+idx, iAgent);
         
-        rotate_g2l_xy(dx_g, dy_g, agents[this->ID]->state[STATE_YAW], dx_l, dy_l);
-        relX.insert(relX.begin()+idx, dx_l);
-        relY.insert(relY.begin()+idx, dy_l);      
+        relX.insert(relX.begin()+idx, dx_g);
+        relY.insert(relY.begin()+idx, dy_g);      
       }
     }
   }
@@ -265,11 +339,11 @@ void uwb_swarming::state_estimation()
   }
   #ifdef LOG
     std::stringstream data;
-    // data << simtime_seconds << std::endl; // << ", " << _other_id << ", "
+    // data << _ref_time << std::endl; // << ", " << _other_id << ", "
     //      << dx_l << ", " << dy_l << ", " << dyaw << ", "
     //      << _state[EKF_ST_X] << ", " << _state[EKF_ST_Y] << ", " << _state[EKF_ST_PSI] << ", "
     //      << ex << ", " << ey << ", " << epsi << std::endl;
-    data << simtime_seconds
+    data << _ref_time
           << std::fixed << std::setprecision(2) 
           << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.comp_time_us 
           << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.comp_time_us 
@@ -285,7 +359,6 @@ void uwb_swarming::animation(const uint16_t ID)
   draw d;
 
   d.circle_loop(COMMUNICATION_RANGE);
-
   if (this->ID == 0)
   {
     // _p_ekf_ref->animate();
@@ -328,11 +401,12 @@ void uwb_swarming::rel_loc_animation(const uint16_t agent_ID, const uint16_t est
     // Draw groundtruth
     dx_g = agents[i_agent]->state[STATE_X] - agents[agent_ID]->state[STATE_X];
     dy_g = agents[i_agent]->state[STATE_Y] - agents[agent_ID]->state[STATE_Y];
-    rotate_g2l_xy(dx_g, dy_g, own_yaw, dx_l, dy_l);
+    // rotate_g2l_xy(dx_g, dy_g, own_yaw, dx_l, dy_l);
     d_yaw = agents[i_agent]->state[STATE_YAW] - agents[agent_ID]->state[STATE_YAW];
 
-    d.agent_raw(i_agent, dx_l, dy_l, d_yaw);
-
+    // d.agent_raw(i_agent, dx_l, dy_l, d_yaw);
+    d.agent_raw(i_agent, dx_g, dy_g, d_yaw);
+  
     // Draw estimate
     // uint16_t storage_id = _swarm.get_storage_index(i_agent);
     // d.estimate(i_agent, _swarm._agents[storage_id].state.relX,

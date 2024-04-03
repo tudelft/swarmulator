@@ -137,7 +137,7 @@ void SwarmRanging::shift_timestamps(ranging_table_t &agentB){
 
 
 
-void SwarmRanging::send_ranging_ping(float rhoX, float rhoY, float dPsi)
+void SwarmRanging::send_ranging_ping(float vx, float vy)
 {
     // Initialize Swarm Ranging Ping
     swarm_ranging_ping_t tx_ping;
@@ -148,9 +148,8 @@ void SwarmRanging::send_ranging_ping(float rhoX, float rhoY, float dPsi)
     memcpy(&tx_ping.sender.last_tx, _tx_history[0].raw, 5);
     
     // Convert inputs to 16 bit integers to save bandwidth
-    tx_ping.sender.velocities[0] = (int16_t)(rhoX * 1000);
-    tx_ping.sender.velocities[1] = (int16_t)(rhoY * 1000);
-    tx_ping.sender.yawrate = (int16_t)(dPsi * 1000);
+    tx_ping.sender.velocities[0] = (int16_t)(vx * 1000);
+    tx_ping.sender.velocities[1] = (int16_t)(vy * 1000);
 
     // Pick agents to include in ping
     order_by_rssi();
@@ -185,69 +184,103 @@ void SwarmRanging::send_ranging_ping(float rhoX, float rhoY, float dPsi)
 }
 
 
-void SwarmRanging::receive_new_ranging(std::vector<ekf_range_measurement_t> &ranges, std::vector<ekf_input_t> &inputs)
+void SwarmRanging::process_incoming_data(const float time_now)
 {
-    std::vector<swarm_ranging_ping_t> rx_pings;
-    std::vector<float> rx_rssi;
-    environment.uwb_channel.receive_srp(_self_id, &rx_pings, &rx_rssi);
+    _direct_range_buffer.clear();
+    _secondary_range_buffer.clear();
+    _input_buffer.clear();
+
+    // std::vector<swarm_ranging_ping_t> rx_pings;
+    // std::vector<float> rx_rssi;
+    // environment.uwb_channel.receive_srp(_self_id, &rx_pings, &rx_rssi);
     uwb_time_t rx_timestamp = {.full = 1};
 
-    if (rx_pings.size() == rx_rssi.size()){
-        for (uint16_t i_ping=0; i_ping<rx_pings.size(); i_ping++){
-            process_ranging_ping(rx_timestamp, rx_pings[i_ping], rx_rssi[i_ping], inputs);
-            _evaluator.add_message_by_payload(SRP_SIZE_BITS(rx_pings[i_ping].n_agents));
+    // if (rx_pings.size() == rx_rssi.size()){
+    //     for (uint16_t i_ping=0; i_ping<rx_pings.size(); i_ping++){
+    //         process_ranging_ping(rx_timestamp, rx_pings[i_ping], rx_rssi[i_ping], _input_buffer, time_now);
+    //         _evaluator.add_message_by_payload(SRP_SIZE_BITS(rx_pings[i_ping].n_agents));
+    //     }
+    // }
+    _srp_buffer_mutex.lock();
+    if (_srp_buffer.size() == _rssi_buffer.size()){
+        for (uint16_t i_ping=0; i_ping<_srp_buffer.size(); i_ping++){
+            process_ranging_ping(rx_timestamp, _srp_buffer[i_ping], _rssi_buffer[i_ping], _input_buffer, time_now);
+            _evaluator.add_message_by_payload(SRP_SIZE_BITS(_srp_buffer[i_ping].n_agents));
         }
     }
+    _srp_buffer.clear();
+    _rssi_buffer.clear();
+    _srp_buffer_mutex.unlock();
 
-    calculate_direct_ranges();
-
-    for (uint16_t i_range=0; i_range<_range_measurements.size(); i_range++){
-        ranges.push_back(_range_measurements[i_range]);
-        _animation_buffer.push_back(_range_measurements[i_range]);
+    calculate_direct_ranges(time_now);
+    
+    // update animation buffer
+    for (uint16_t iRange=0; iRange<_direct_range_buffer.size(); iRange++){
+        _animation_buffer.push_back(_direct_range_buffer[iRange]);
     }
-    _range_measurements.clear();
+    for (uint16_t iRange=0; iRange<_secondary_range_buffer.size(); iRange++){
+        _animation_buffer.push_back(_secondary_range_buffer[iRange]);
+    }
+}
+
+void SwarmRanging::get_new_ranging(std::vector<ekf_range_measurement_t> &ranges, std::vector<ekf_input_t> &inputs)
+{
+    for (uint16_t iRange=0; iRange<_direct_range_buffer.size(); iRange++){
+        ranges.push_back(_direct_range_buffer[iRange]);
+    }
+
+    for (uint16_t iRange=0; iRange<_secondary_range_buffer.size(); iRange++){
+        ranges.push_back(_secondary_range_buffer[iRange]);
+    }
+
+    for(uint16_t iInput=0; iInput<_input_buffer.size(); iInput++){
+        inputs.push_back(_input_buffer[iInput]);
+    }
     
 }
 
-void SwarmRanging::receive_all_ranging(std::vector<ekf_range_measurement_t> &ranges, std::vector<ekf_input_t> &inputs){
-    std::vector<swarm_ranging_ping_t> rx_pings;
-    environment.uwb_channel.receive_all_srp(&rx_pings);
-    for (uint16_t iPing=0; iPing<rx_pings.size(); iPing++){
-        if (rx_pings[iPing].header_s.sourceAddress != _self_id){
-            ekf_input_t new_input = {.id = (uint16_t) rx_pings[iPing].header_s.sourceAddress,
-                                .rhoX = rx_pings[iPing].sender.velocities[0]/1000.0f,
-                                .rhoY = rx_pings[iPing].sender.velocities[1]/1000.0f,
-                                .dPsi = rx_pings[iPing].sender.yawrate/1000.0f};
-            inputs.push_back(new_input);
-        }
-        
-        for (uint8_t iAgent=0; iAgent<rx_pings[iPing].n_agents; iAgent++){
-            if (rx_pings[iPing].agents[iAgent].last_range != 0){
-                ekf_range_measurement_t new_range = {.id_A = (uint16_t) rx_pings[iPing].header_s.sourceAddress,
-                                                   .id_B = rx_pings[iPing].agents[iAgent].id,
-                                                   .range = rx_pings[iPing].agents[iAgent].last_range/1000.0f,
-                                                   .timestamp = simtime_seconds};
+void SwarmRanging::get_all_ranging(std::vector<ekf_range_measurement_t> &ranges, std::vector<ekf_input_t> &inputs, const float time){
+    // std::vector<swarm_ranging_ping_t> rx_pings;
+    // environment.uwb_channel.receive_all_srp(&rx_pings);
+    _srp_buffer_mutex.lock();
+    for (uint16_t iPing=0; iPing<_srp_buffer_not_in_range.size(); iPing++){
+        ekf_input_t new_input = {.id = (uint16_t) _srp_buffer_not_in_range[iPing].header_s.sourceAddress,
+                            .vx = _srp_buffer_not_in_range[iPing].sender.velocities[0]/1000.0f,
+                            .vy = _srp_buffer_not_in_range[iPing].sender.velocities[1]/1000.0f,
+                            .timestamp = time};
+        inputs.push_back(new_input);
+    
+        for (uint8_t iAgent=0; iAgent<_srp_buffer_not_in_range[iPing].n_agents; iAgent++){
+            if (_srp_buffer_not_in_range[iPing].agents[iAgent].last_range != 0){
+                ekf_range_measurement_t new_range = {.id_A = (uint16_t) _srp_buffer_not_in_range[iPing].header_s.sourceAddress,
+                                                .id_B = _srp_buffer_not_in_range[iPing].agents[iAgent].id,
+                                                .range = _srp_buffer_not_in_range[iPing].agents[iAgent].last_range/1000.0f,
+                                                .timestamp = time};
                 ranges.push_back(new_range);
             }    
         }
+        
     }
+    _srp_buffer_not_in_range.clear();
+    _srp_buffer_mutex.unlock();
+    // finally, add data from in-range pings
+    get_new_ranging(ranges, inputs);
 }
 
 
-void SwarmRanging::process_ranging_ping(uwb_time_t &rx_time, const swarm_ranging_ping_t &msg, float rssi, std::vector<ekf_input_t> &inputs)
+void SwarmRanging::process_ranging_ping(uwb_time_t &rx_time, const swarm_ranging_ping_t &msg, float rssi, std::vector<ekf_input_t> &inputs, const float time)
 {
     uint16_t src_id = (uint16_t) msg.header_s.sourceAddress;
     uint16_t storage_idx = get_storage_index(src_id);
 
     _agents[storage_idx].rssi = rssi;
-    _agents[storage_idx].t_last_seen = simtime_seconds;
+    _agents[storage_idx].t_last_seen = time;
 
     ekf_input_t new_input = {.id = (uint16_t) msg.header_s.sourceAddress,
-                            .rhoX = msg.sender.velocities[0]/1000.0f,
-                            .rhoY = msg.sender.velocities[1]/1000.0f,
-                            .dPsi = msg.sender.yawrate/1000.0f,
+                            .vx = msg.sender.velocities[0]/1000.0f,
+                            .vy = msg.sender.velocities[1]/1000.0f,
                             .rssi = rssi,
-                            .timestamp = simtime_seconds};
+                            .timestamp = time};
     inputs.push_back(new_input);
 
     bool is_not_ranging = (_agents[storage_idx].tx_time[POLL].full == 0);
@@ -265,16 +298,16 @@ void SwarmRanging::process_ranging_ping(uwb_time_t &rx_time, const swarm_ranging
             } else {
                 add_timestamps_report(_agents[storage_idx], rx_time, msg.sender, msg.agents[i_agent]);
             }
-        } //else {
+        } else {
             // enqueue secondary distance measurement
             if (msg.agents[i_agent].last_range != 0){
                 ekf_range_measurement_t new_range = {.id_A = (uint16_t) msg.header_s.sourceAddress,
                                                    .id_B = msg.agents[i_agent].id,
                                                    .range = msg.agents[i_agent].last_range/1000.0f,
-                                                   .timestamp = simtime_seconds};
-                _range_measurements.push_back(new_range);
+                                                   .timestamp = time};
+                _secondary_range_buffer.push_back(new_range);
             }
-        //}
+        }
     }
 
     if (is_not_ranging){
@@ -285,7 +318,7 @@ void SwarmRanging::process_ranging_ping(uwb_time_t &rx_time, const swarm_ranging
 }
 
 
-void SwarmRanging::calculate_direct_ranges()
+void SwarmRanging::calculate_direct_ranges(const float time)
 {
     for (uint16_t i_agent=0; i_agent<_agents.size(); i_agent++){
         if(_agents[i_agent].tx_time[POLL].full == 0 ||
@@ -318,16 +351,31 @@ void SwarmRanging::calculate_direct_ranges()
 
             range += _rg.gaussian_float(0,MEAS_NOISE_UWB);
             _agents[i_agent].last_range_mm = (uint16_t) (range*1000);
-            _agents[i_agent].t_last_range = simtime_seconds;
+            _agents[i_agent].t_last_range = time;
 
             ekf_range_measurement_t meas = {.id_A = _self_id,
                                         .id_B = _agents[i_agent].id,
                                         .range = range,
-                                        .timestamp = simtime_seconds};
-            _range_measurements.push_back(meas);
+                                        .timestamp = time};
+            _direct_range_buffer.push_back(meas);
             shift_timestamps(_agents[i_agent]);
         }
     }    
+}
+
+void SwarmRanging::enqueue_srp(const swarm_ranging_ping_t* srp, const float rssi, bool in_range){
+    if((uint16_t)srp->header_s.sourceAddress == _self_id){
+        // failsafe to make sure we don't process our own pings
+        return;
+    }
+    _srp_buffer_mutex.lock();
+    if(in_range){
+        _srp_buffer.push_back(*srp);
+        _rssi_buffer.push_back(rssi);
+    } else {
+        _srp_buffer_not_in_range.push_back(*srp);
+    }
+    _srp_buffer_mutex.unlock();
 }
 
 void SwarmRanging::rel_loc_animation(const uint16_t ID){
@@ -346,7 +394,8 @@ void SwarmRanging::rel_loc_animation(const uint16_t ID){
             dx_g = agents[i_agent]->state[STATE_X] - agents[ID]->state[STATE_X];
             dy_g = agents[i_agent]->state[STATE_Y] - agents[ID]->state[STATE_Y];
             rotate_g2l_xy(dx_g, dy_g, own_yaw, dx_l, dy_l);
-            d.segment(0.0f, 0.0f,dx_l, dy_l, orange);
+            // d.segment(0.0f, 0.0f,dx_l, dy_l, orange);
+            d.segment(0.0f, 0.0f,dx_g, dy_g, orange);
         }
     }
 
@@ -357,14 +406,12 @@ void SwarmRanging::rel_loc_animation(const uint16_t ID){
             idA = _animation_buffer[i_meas].id_A;
             idB = _animation_buffer[i_meas].id_B;
 
-            dx_g = agents[idA]->state[STATE_X] - agents[ID]->state[STATE_X];
-            dy_g = agents[idA]->state[STATE_Y] - agents[ID]->state[STATE_Y];
-            rotate_g2l_xy(dx_g, dy_g, own_yaw, dxA, dyA);
+            dxA = agents[idA]->state[STATE_X] - agents[ID]->state[STATE_X];
+            dyA = agents[idA]->state[STATE_Y] - agents[ID]->state[STATE_Y];
 
-            dx_g = agents[idB]->state[STATE_X] - agents[ID]->state[STATE_X];
-            dy_g = agents[idB]->state[STATE_Y] - agents[ID]->state[STATE_Y];
-            rotate_g2l_xy(dx_g, dy_g, own_yaw, dxB, dyB);
-
+            dxB = agents[idB]->state[STATE_X] - agents[ID]->state[STATE_X];
+            dyB = agents[idB]->state[STATE_Y] - agents[ID]->state[STATE_Y];
+            
             d.segment(dxA, dyA, dxB, dyB, green);
         } else {
             // measurement is old
@@ -372,7 +419,6 @@ void SwarmRanging::rel_loc_animation(const uint16_t ID){
         }
     }
 }
-
 
 RangingEvaluator::RangingEvaluator()
 {
@@ -392,16 +438,16 @@ void RangingEvaluator::add_message_by_payload(uint16_t payload_bits){
     _total_airtime_ns += airtime;
 }
 
-void RangingEvaluator::calculate_load()
+void RangingEvaluator::calculate_load(const float time)
 {
-    if (_last_load_calculation < simtime_seconds - RANGING_EVALUATION_DT){
-        float dt = (simtime_seconds - _last_load_calculation);
+    if (_last_load_calculation < time - RANGING_EVALUATION_DT){
+        float dt = (time - _last_load_calculation);
         _time_elapsed += dt;
 
         _current_load = (float)(1e-9 * _airtime_accum_ns) / dt;
         _avg_load = (float)(1e-9 * _total_airtime_ns) / _time_elapsed;
 
         _airtime_accum_ns = 0;
-        _last_load_calculation = simtime_seconds;
+        _last_load_calculation = time;
     }
 }

@@ -6,6 +6,7 @@
 #include <vector>
 #include <chrono>
 
+#include "main.h"
 #include "ekf_math.h"
 #include "draw.h"
 #include "trigonometry.h"
@@ -15,29 +16,45 @@
 #define AGENT_TIMEOUT_MIN 2 // earliest time after which an agent is discarded [s]
 #define MIRROR_START_TIME 1
 #define MIRROR_END_TIME 30 // during initialization, a mirrored estimate is also calculated
+#define INITIALIZATION_PERIOD 30 // don't use indirect measurements during initialization
 
-static float proc_noise_velXY = MEAS_NOISE_RHOX;
-static float proc_noise_gyro = MEAS_NOISE_DPSI;
-
+static float proc_noise_velXY = MEAS_NOISE_VX;
 static float meas_noise_uwb = MEAS_NOISE_UWB;
 
-FullEKF::FullEKF(const uint16_t nagents, const uint16_t selfID, const std::string name)
+FullEKF::FullEKF(const uint16_t nagents, const uint16_t selfID, const bool decouple_agents, const std::string name)
         : RelLocEstimator(nagents, selfID, name)
 {
+    // always decouple for initialization 
+    _decouple_agents = true;
+    _stay_decoupled = decouple_agents;
+
+    // initialize vectors for state and covariance matrix
     for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
-
         _P.push_back(std::vector<MatrixFloat>());
-
         for (uint16_t jAgent=0; jAgent<_n_agents; jAgent++){
             _P[iAgent].push_back(MatrixFloat(EKF_ST_DIM, EKF_ST_DIM));
         }
-
-        // initialize cov matrix diagonal
-        _P[iAgent][iAgent].data[EKF_ST_X][EKF_ST_X] = STDEV_INITIAL_POS_XY;
-        _P[iAgent][iAgent].data[EKF_ST_Y][EKF_ST_Y] = STDEV_INITIAL_POS_XY;
-        _P[iAgent][iAgent].data[EKF_ST_PSI][EKF_ST_PSI] = STDEV_INITIAL_YAW;
     }
+
+    _ag_init = new AgentInitializer(_self_id);
+    reset();
+}
+
+void FullEKF::reset(){
+    for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
+        _P[iAgent][iAgent].data[EKF_ST_X][EKF_ST_X] = STDEV_INITIAL_POS_XY;
+        _P[iAgent][iAgent].data[EKF_ST_X][EKF_ST_Y] = 0;
+        _P[iAgent][iAgent].data[EKF_ST_Y][EKF_ST_X] = 0;
+        _P[iAgent][iAgent].data[EKF_ST_Y][EKF_ST_Y] = STDEV_INITIAL_POS_XY;
+
+        _state[iAgent][STATE_X] = 0;
+        _state[iAgent][STATE_Y] = 0;
+
+        _ids[iAgent] = _self_id; // means no agent
+    }
+
     mirror_is_init = false;
+    _last_reset_time = simtime_seconds;
 }
 
 void FullEKF::remove_agent(const uint16_t agent_id){
@@ -46,11 +63,11 @@ void FullEKF::remove_agent(const uint16_t agent_id){
         _ids[idx] = _self_id; // means no agent
         // No need to clear other vectors as the id is used to access them
     } else {
-        std::cout << _name << ": Could not remove agent " << agent_id << std::endl;
+        std::cout << _name << ": Could not remove agent " << agent_id << ": Agent not found!" << std::endl;
     }
 }
 
-bool FullEKF::add_agent(const uint16_t agent_id, const float agent_rssi, uint16_t *idx){
+bool FullEKF::add_agent(const uint16_t agent_id, const float agent_rssi, const float x0, const float y0, const float var_x, const float var_y, uint16_t *idx){
     // Check if agent is already in
     if (get_index(agent_id, idx)){
         return false;
@@ -84,26 +101,29 @@ bool FullEKF::add_agent(const uint16_t agent_id, const float agent_rssi, uint16_
 
     if (index_found){
         // add agent
-        std::cout << _name << " " << _self_id << ": Swapped agent at idx " << best_idx
-                  << ": " << _ids[best_idx] << ">" << agent_id << std::endl;
+        //std::cout << _name << " " << _self_id << ": Swapped agent at idx " << best_idx
+        //          << ": " << _ids[best_idx] << ">" << agent_id << std::endl;
         *idx = best_idx;
         _ids[best_idx] = agent_id;
         // TODO better state initialization (e.g. based on closest other agent?)
         // e.g. if we receive a direct message, check if there is a distance to another agent in there
         // atm initialize other agent in front at a distance based on message (most likely place to appear)
-        _state[best_idx][EKF_ST_X] = -agent_rssi;
-        _state[best_idx][EKF_ST_Y] = 0;
-        _state[best_idx][EKF_ST_PSI] = 0;
+        
+        // float range = -agent_rssi; // placeholder for a real case where rssi != -range
+        // float norm_v = sqrtf(powf(rel_vx, 2) + powf(rel_vy, 2));
+
+        // _state[best_idx][EKF_ST_X] = - range * (rel_vx/norm_v);
+        // _state[best_idx][EKF_ST_Y] = - range * (rel_vy/norm_v);
+        _state[best_idx][EKF_ST_X] = x0;
+        _state[best_idx][EKF_ST_Y] = y0;
 
         if(mirror_is_init){
-            _mirror_state[best_idx][EKF_ST_X] = -agent_rssi;
-            _mirror_state[best_idx][EKF_ST_Y] = 0;
-            _mirror_state[best_idx][EKF_ST_PSI] = 0;
+            _mirror_state[best_idx][EKF_ST_X] = _state[best_idx][EKF_ST_X];
+            _mirror_state[best_idx][EKF_ST_Y] = _state[best_idx][EKF_ST_Y];
         }
         
-        _input[best_idx][EKF_IN_PX] = 0;
-        _input[best_idx][EKF_IN_PY] = 0;
-        _input[best_idx][EKF_IN_DPSI] = 0;
+        _input[best_idx][EKF_IN_VX] = 0;
+        _input[best_idx][EKF_IN_VY] = 0;
         
         for (uint16_t iAgent=0; iAgent<_P.size(); iAgent++){
             for (uint16_t iRow=0; iRow<EKF_ST_DIM; iRow++){
@@ -118,13 +138,16 @@ bool FullEKF::add_agent(const uint16_t agent_id, const float agent_rssi, uint16_
             }
 
         }
-        _P[best_idx][best_idx].data[EKF_ST_X][EKF_ST_X] = STDEV_INITIAL_POS_XY;
-        _P[best_idx][best_idx].data[EKF_ST_Y][EKF_ST_Y] = STDEV_INITIAL_POS_XY;
-        _P[best_idx][best_idx].data[EKF_ST_PSI][EKF_ST_PSI] = STDEV_INITIAL_YAW;
+        _P[best_idx][best_idx].data[EKF_ST_X][EKF_ST_X] = var_x;
+        _P[best_idx][best_idx].data[EKF_ST_Y][EKF_ST_Y] = var_y;
         if (mirror_is_init){
-            _mirror_P[best_idx][best_idx].data[EKF_ST_X][EKF_ST_X] = STDEV_INITIAL_POS_XY;
-            _mirror_P[best_idx][best_idx].data[EKF_ST_Y][EKF_ST_Y] = STDEV_INITIAL_POS_XY;
-            _mirror_P[best_idx][best_idx].data[EKF_ST_PSI][EKF_ST_PSI] = STDEV_INITIAL_YAW;
+            _mirror_P[best_idx][best_idx].data[EKF_ST_X][EKF_ST_X] = var_x;
+            _mirror_P[best_idx][best_idx].data[EKF_ST_Y][EKF_ST_Y] = var_y;
+        }
+        if (_stay_decoupled){
+            std::cout << _name << _self_id << ": Added Ag" << agent_id 
+                        << " at (" << x0 << "," << y0 << ") - variance ("
+                        << var_x << "," << var_y << ")"  <<std::endl;
         }
         return true;
     } else {
@@ -135,33 +158,56 @@ bool FullEKF::add_agent(const uint16_t agent_id, const float agent_rssi, uint16_
 void FullEKF::step(const float time, ekf_input_t &self_input){
     auto start = std::chrono::high_resolution_clock::now();
 
-    if (!mirror_is_init && time < MIRROR_END_TIME && time > MIRROR_START_TIME){
-        init_mirror();
-    }
-    if (mirror_is_init && time > _next_mirror_check){
-        select_mirror();
+    if (time>=INITIALIZATION_PERIOD){
+        _decouple_agents = _stay_decoupled;
     }
 
+    // if (_decouple_agents == false){
+    //     if (!mirror_is_init && time < MIRROR_END_TIME && time > MIRROR_START_TIME){
+    //         init_mirror();
+    //     }
+    //     if (mirror_is_init && time > _next_mirror_check){
+    //         select_mirror();
+    //     }
+    // }
+
     // add own input
-    _self_input[EKF_IN_PX] = self_input.rhoX;
-    _self_input[EKF_IN_PY] = self_input.rhoY;
-    _self_input[EKF_IN_DPSI] = self_input.dPsi;
+    _self_input[EKF_IN_VX] = self_input.vx;
+    _self_input[EKF_IN_VY] = self_input.vy;
 
     // add other agent's input
     uint16_t idx;
     for (uint16_t iInput=0; iInput<_input_queue.size(); iInput++){
-        if (get_index(_input_queue[iInput].id, &idx) || add_agent(_input_queue[iInput].id, _input_queue[iInput].rssi, &idx)){
-            _input[idx][EKF_IN_PX] = _input_queue[iInput].rhoX;
-            _input[idx][EKF_IN_PY] = _input_queue[iInput].rhoY;
-            _input[idx][EKF_IN_DPSI] = _input_queue[iInput].dPsi;
+        if (get_index(_input_queue[iInput].id, &idx)){
+            _input[idx][EKF_IN_VX] = _input_queue[iInput].vx;
+            _input[idx][EKF_IN_VY] = _input_queue[iInput].vy;
             _rssi[idx] = _input_queue[iInput].rssi;
             _last_seen[idx] = _input_queue[iInput].timestamp;
-        } 
-        // else {
-        //     std::cout << _name << ": Couldn't add input for agent" << _input_queue[iInput].id 
-        //               << "! Currently known: " <<  _ids[0] << " " << _ids[1] << " " << _ids[2] << " " << _ids[3] << " " << std::endl;
-        // }
+        } else {
+            // agent not yet in state space
+            float x0, y0, var_x, var_y;
+            // _ag_init->add_velocities(_input_queue[iInput].id, _input_queue[iInput].vx, _input_queue[iInput].vy);
+            if (_ag_init->get_initial_position(_input_queue[iInput].id, time, &x0, &y0, &var_x, &var_y)){
+                if(add_agent(_input_queue[iInput].id, _input_queue[iInput].rssi, x0, y0, var_x, var_y, &idx)){
+                    _input[idx][EKF_IN_VX] = _input_queue[iInput].vx;
+                    _input[idx][EKF_IN_VY] = _input_queue[iInput].vy;
+                    _rssi[idx] = _input_queue[iInput].rssi;
+                    _last_seen[idx] = _input_queue[iInput].timestamp;
+                }
+            } else {
+                _ag_init->add_velocities(_input_queue[iInput].id, _input_queue[iInput].vx, _input_queue[iInput].vy, _input_queue[iInput].timestamp);
+            }
+            // float rel_vx = _input_queue[iInput].vx - self_input.vx;
+            // float rel_vy = _input_queue[iInput].vy - self_input.vy;
+            // if (add_agent(_input_queue[iInput].id, _input_queue[iInput].rssi, rel_vx, rel_vy, &idx)){
+            //     _input[idx][EKF_IN_VX] = _input_queue[iInput].vx;
+            //     _input[idx][EKF_IN_VY] = _input_queue[iInput].vy;
+            //     _rssi[idx] = _input_queue[iInput].rssi;
+            //     _last_seen[idx] = _input_queue[iInput].timestamp;
+            // }
+        }
     }
+
     _input_queue.clear();
     if (time > _last_prediction_time + EKF_INTERVAL){
         predict(time, _state, _P);
@@ -188,9 +234,12 @@ void FullEKF::step(const float time, ekf_input_t &self_input){
             update_with_direct_range(_range_queue[iMeas], _state, _P, &_direct_error);
             if(mirror_is_init){update_with_direct_range(_range_queue[iMeas], _mirror_state, _mirror_P, &_mirror_direct_error);}
         
-        } else {
+        } else if (_decouple_agents == false) {
             update_with_indirect_range(_range_queue[iMeas], _state, _P);
             if(mirror_is_init){update_with_indirect_range(_range_queue[iMeas], _mirror_state, _mirror_P);}
+
+        } else {
+            continue;
         }
     }
     _range_queue.clear();
@@ -201,11 +250,19 @@ void FullEKF::step(const float time, ekf_input_t &self_input){
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop-start);
     _performance.comp_time_us = duration.count();
     
+
+    for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
+        _cov[iAgent][EKF_ST_X] = _P[iAgent][iAgent].data[EKF_ST_X][EKF_ST_X];
+        _cov[iAgent][EKF_ST_Y] = _P[iAgent][iAgent].data[EKF_ST_Y][EKF_ST_Y];
+    }
+
     if (!assert_state_valid()){
         std::cout << _name << " " << _self_id << ": State Invalid" << std::endl;
+        reset();
     }
     if (!assert_covariance_valid(_P)){
         std::cout << _name << " " << _self_id << ": Cov Invalid" << std::endl;
+        reset();
     }
 
     
@@ -230,60 +287,23 @@ void FullEKF::step(const float time, ekf_input_t &self_input){
 void FullEKF::predict(float time, std::vector<std::vector<float>> &state, std::vector<std::vector<MatrixFloat>> &P){
     float dt = time-_last_prediction_time;
 
-    // Off diagonal blocks of A & B are 0
+    // A = Identity
+    // Off diagonal blocks of B are 0
     std::vector<MatrixFloat> diagA;
     // std::vector<MatrixFloat> diagB;
 
     // Agent specific updates
     float d_state[EKF_ST_DIM];
-    float sPsi, cPsi;
     for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
-        sPsi = std::sin(state[iAgent][EKF_ST_PSI]);
-        cPsi = std::cos(state[iAgent][EKF_ST_PSI]);
-
-        // Prediction Jacobian
-        MatrixFloat Ai (EKF_ST_DIM, EKF_ST_DIM);
-        Ai.data[EKF_ST_X][EKF_ST_X] = 1.0f;
-        Ai.data[EKF_ST_X][EKF_ST_Y] = dt*_self_input[EKF_IN_DPSI];
-        Ai.data[EKF_ST_X][EKF_ST_PSI] = dt*(-sPsi*_input[iAgent][EKF_IN_PX] - cPsi*_input[iAgent][EKF_IN_PY]);
-
-        Ai.data[EKF_ST_Y][EKF_ST_X] = -dt*_self_input[EKF_IN_DPSI];
-        Ai.data[EKF_ST_Y][EKF_ST_Y] = 1.0f;
-        Ai.data[EKF_ST_Y][EKF_ST_PSI] = dt*(cPsi*_input[iAgent][EKF_IN_PX] - sPsi*_input[iAgent][EKF_IN_PY]);
-        
-        Ai.data[EKF_ST_PSI][EKF_ST_X] = 0.0f;
-        Ai.data[EKF_ST_PSI][EKF_ST_Y] = 0.0f;
-        Ai.data[EKF_ST_PSI][EKF_ST_PSI] = 1.0f;
-        
-        diagA.push_back(Ai);
-
+        // Prediction Jacobian is A = Identity
         // Input Matrix: Not needed if Qs = Qi and noise in x & y is the same
-        // MatrixFloat Bi (EKF_ST_DIM, EKF_IN_DIM);
-        // Bi.data[EKF_ST_X][EKF_IN_PX] = dt*cPsi;
-        // Bi.data[EKF_ST_X][EKF_IN_PY] = -dt*sPsi;
-        // Bi.data[EKF_ST_X][EKF_IN_DPSI] = 0.0f;
-
-        // Bi.data[EKF_ST_Y][EKF_IN_PX] = dt*sPsi;
-        // Bi.data[EKF_ST_Y][EKF_IN_PY] = dt*cPsi;
-        // Bi.data[EKF_ST_Y][EKF_IN_DPSI] = 0.0f;
-
-        // Bi.data[EKF_ST_PSI][EKF_IN_PX] = 0.0f;
-        // Bi.data[EKF_ST_PSI][EKF_IN_PY] = 0.0f;
-        // Bi.data[EKF_ST_PSI][EKF_IN_DPSI] = dt;
-
-        // diagB.push_back(Bi);
-
+        
         // state change
-        d_state[EKF_ST_X] = cPsi*_input[iAgent][EKF_IN_PX] - sPsi*_input[iAgent][EKF_IN_PY] - _self_input[EKF_IN_PX]
-                            + _self_input[EKF_IN_DPSI]*state[iAgent][EKF_ST_Y];
-        d_state[EKF_ST_Y] = sPsi*_input[iAgent][EKF_IN_PX] + cPsi*_input[iAgent][EKF_IN_PY] - _self_input[EKF_IN_PY]
-                            - _self_input[EKF_IN_DPSI]*state[iAgent][EKF_ST_X];
-        d_state[EKF_ST_PSI] = _input[iAgent][EKF_IN_DPSI] - _self_input[EKF_IN_DPSI]; 
-    
+        d_state[EKF_ST_X] = _input[iAgent][EKF_IN_VX] - _self_input[EKF_IN_VX];
+        d_state[EKF_ST_Y] = _input[iAgent][EKF_IN_VY] - _self_input[EKF_IN_VY];
+
         state[iAgent][EKF_ST_X] += dt * d_state[EKF_ST_X];
         state[iAgent][EKF_ST_Y] += dt * d_state[EKF_ST_Y];
-        state[iAgent][EKF_ST_PSI] += dt * d_state[EKF_ST_PSI];
-        wrapTo2Pi(state[iAgent][EKF_ST_PSI]);
     }
 
     // Propagate Covariance
@@ -293,19 +313,17 @@ void FullEKF::predict(float time, std::vector<std::vector<float>> &state, std::v
     for (uint16_t i=0; i<_n_agents; i++){
         for (uint16_t j=0; j<_n_agents; j++){
             // Prediction Propagation
-            fmat_mult(diagA[i], P[i][j], tmpSS1);   // Ai*Pij
-            fmat_trans(diagA[j], tmpSS2);       // Aj^T
-            fmat_mult(tmpSS1, tmpSS2, P[i][j]);             // Ai*Pij*Aj^T
-
-            // Add ranging agent process noise
-            P[i][j].data[EKF_ST_X][EKF_ST_X] += proc_noise_velXY * dt * dt;
-            P[i][j].data[EKF_ST_Y][EKF_ST_Y] += proc_noise_velXY * dt * dt;
-            P[i][j].data[EKF_ST_PSI][EKF_ST_PSI] += proc_noise_gyro * dt * dt;
+            // A=I >> Ai*Pij*Aj^T = Pij
+            
+            if((_decouple_agents == false) || (i==j)){
+                // Add "self" process noise
+                P[i][j].data[EKF_ST_X][EKF_ST_X] += proc_noise_velXY * dt * dt;
+                P[i][j].data[EKF_ST_Y][EKF_ST_Y] += proc_noise_velXY * dt * dt;
+            }
         }
         // Add other agent process noise (only diagonal)
         P[i][i].data[EKF_ST_X][EKF_ST_X] += proc_noise_velXY * dt * dt;
         P[i][i].data[EKF_ST_Y][EKF_ST_Y] += proc_noise_velXY * dt * dt;
-        P[i][i].data[EKF_ST_PSI][EKF_ST_PSI] += proc_noise_gyro * dt * dt;
     }
 }
 
@@ -325,39 +343,66 @@ bool FullEKF::update_with_direct_range(const ekf_range_measurement_t &meas, std:
         MatrixFloat HT(EKF_ST_DIM, 1);
         HT.data[EKF_ST_X][0] = state[idx][EKF_ST_X]/pred;
         HT.data[EKF_ST_Y][0] = state[idx][EKF_ST_Y]/pred;
-        HT.data[EKF_ST_PSI][0] = 0;
 
-        // PHT = [P0i HiT .. Pii HiT .. Pni HiT]T
-        std::vector<MatrixFloat> PHT;
-        for (uint16_t iRow=0; iRow<_n_agents; iRow++){
-            PHT.push_back(MatrixFloat(EKF_ST_DIM, 1));
-            fmat_mult(P[iRow][idx], HT, PHT[iRow]);
-        }
+        // when decoupled, only update state of the agent in question
+        if(_decouple_agents){
+            MatrixFloat PHT(EKF_ST_DIM,1);
+            fmat_mult(_P[idx][idx], HT, PHT);
 
-        float HPHT_R = meas_noise_uwb;
-        for (uint16_t iState=0; iState<EKF_ST_DIM; iState++){
-            HPHT_R += HT.data[iState][0]*PHT[idx].data[iState][0];
-        }
-
-        // state update (X = X + K(y-h), K=PH^T/(HPH^T+R)
-        for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
+            float HPHT_R = meas_noise_uwb;
             for (uint16_t iState=0; iState<EKF_ST_DIM; iState++){
-                state[iAgent][iState] += PHT[iAgent].data[iState][0]*error/HPHT_R;
+                HPHT_R += HT.data[iState][0]*PHT.data[iState][0];
             }
-            wrapTo2Pi(state[iAgent][EKF_ST_PSI]);
-        }
 
-        // Covariance update (P = P - KHP, KHP = PH^THP/(HPH^T+R))
-        for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
-            for (uint16_t jAgent=0; jAgent<_n_agents; jAgent++){
-                for (unsigned int iRow=0; iRow<EKF_ST_DIM; iRow++){
-                    for (unsigned int iCol=0; iCol<EKF_ST_DIM; iCol++){
-                        P[iAgent][jAgent].data[iRow][iCol] -= (PHT[iAgent].data[iRow][0]*PHT[jAgent].data[iCol][0])/HPHT_R;
+            // State update
+            for (uint16_t iState=0; iState<EKF_ST_DIM; iState++){
+                _state[idx][iState] += PHT.data[iState][0]*error/HPHT_R;
+            }
+
+            // Covariance update (P = P - KHP, KHP = PH^THP/(HPH^T+R))
+            MatrixFloat tmpNN (EKF_ST_DIM, EKF_ST_DIM);
+            for (unsigned int iRow=0; iRow<EKF_ST_DIM; iRow++){
+                for (unsigned int iCol=0; iCol<EKF_ST_DIM; iCol++){
+                    _P[idx][idx].data[iRow][iCol] -= (PHT.data[iRow][0]*PHT.data[iCol][0])/HPHT_R;
+                }
+            }
+
+
+        } else{
+            // PHT = [P0i HiT .. Pii HiT .. Pni HiT]T
+            std::vector<MatrixFloat> PHT;
+            for (uint16_t iRow=0; iRow<_n_agents; iRow++){
+                PHT.push_back(MatrixFloat(EKF_ST_DIM, 1));
+                fmat_mult(P[iRow][idx], HT, PHT[iRow]);
+            }
+
+            float HPHT_R = meas_noise_uwb;
+            for (uint16_t iState=0; iState<EKF_ST_DIM; iState++){
+                HPHT_R += HT.data[iState][0]*PHT[idx].data[iState][0];
+            }
+
+            // state update (X = X + K(y-h), K=PH^T/(HPH^T+R)
+            for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
+                for (uint16_t iState=0; iState<EKF_ST_DIM; iState++){
+                    state[iAgent][iState] += PHT[iAgent].data[iState][0]*error/HPHT_R;
+                }
+            }
+
+            // Covariance update (P = P - KHP, KHP = PH^THP/(HPH^T+R))
+            for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
+                for (uint16_t jAgent=0; jAgent<_n_agents; jAgent++){
+                    for (unsigned int iRow=0; iRow<EKF_ST_DIM; iRow++){
+                        for (unsigned int iCol=0; iCol<EKF_ST_DIM; iCol++){
+                            P[iAgent][jAgent].data[iRow][iCol] -= (PHT[iAgent].data[iRow][0]*PHT[jAgent].data[iCol][0])/HPHT_R;
+                        }
                     }
                 }
             }
         }
         success = true;
+    } else {
+        // agent not yet in state space
+        _ag_init->add_range(meas.id_B, meas.range, meas.timestamp);
     }
     return success;
 }
@@ -378,12 +423,10 @@ bool FullEKF::update_with_indirect_range(const ekf_range_measurement_t &meas, st
         MatrixFloat HiT(EKF_ST_DIM, 1);
         HiT.data[EKF_ST_X][0] = -(state[agent_j][EKF_ST_X]-state[agent_i][EKF_ST_X])/pred;
         HiT.data[EKF_ST_Y][0] = -(state[agent_j][EKF_ST_Y]-state[agent_i][EKF_ST_Y])/pred;
-        HiT.data[EKF_ST_PSI][0] = 0;
 
         MatrixFloat HjT(EKF_ST_DIM, 1);
         HjT.data[EKF_ST_X][0] = (state[agent_j][EKF_ST_X]-state[agent_i][EKF_ST_X])/pred;
         HjT.data[EKF_ST_Y][0] = (state[agent_j][EKF_ST_Y]-state[agent_i][EKF_ST_Y])/pred;
-        HjT.data[EKF_ST_PSI][0] = 0;
         
         std::vector<MatrixFloat> PHT;
         MatrixFloat tmp1(EKF_ST_DIM, 1);
@@ -406,7 +449,6 @@ bool FullEKF::update_with_indirect_range(const ekf_range_measurement_t &meas, st
             for (uint16_t iState=0; iState<EKF_ST_DIM; iState++){
                 state[iAgent][iState] += PHT[iAgent].data[iState][0]*error/HPHT_R;
             }
-            wrapTo2Pi(state[iAgent][EKF_ST_PSI]);
         }
         // Covariance update (P = P - KHP, KHP = PH^THP/(HPH^T+R))
         for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
@@ -442,7 +484,7 @@ bool FullEKF::assert_covariance_valid(std::vector<std::vector<MatrixFloat>> &P){
     float det;
     for (uint16_t i=0; i<P.size(); i++){
         det = fmat_det(P[i][i]);
-        if(det < 0.000000001){
+        if(abs(det) < 0.000000001 || isnan(det) || isinf(det)){
             // std::cout << _name << " " <<_self_id<<": Cov" << i << i << "=" << det << std::endl;
             valid = false;
         }
@@ -453,25 +495,24 @@ bool FullEKF::assert_covariance_valid(std::vector<std::vector<MatrixFloat>> &P){
 void FullEKF::init_mirror() {
     _direct_error = 0;
     _mirror_direct_error = 0;
-    // reset covariance
-    for (uint16_t iAgent = 0; iAgent < _P.size(); iAgent++){
-        for (uint16_t jAgent = 0; jAgent < _P.size(); jAgent++){
-            for (uint16_t iState = 0; iState < EKF_ST_DIM; iState++){
-                for (uint16_t jState = 0; jState < EKF_ST_DIM; jState++){
-                    _P[iAgent][jAgent].data[iState][jState] = 0;
-                }
-            }
-            _P[iAgent][jAgent].data[EKF_ST_X][EKF_ST_X] = STDEV_INITIAL_POS_XY;
-            _P[iAgent][jAgent].data[EKF_ST_Y][EKF_ST_Y] = STDEV_INITIAL_POS_XY;
-            _P[iAgent][jAgent].data[EKF_ST_PSI][EKF_ST_PSI] = STDEV_INITIAL_YAW;
-        }
-    }
+    // // reset covariance
+    // for (uint16_t iAgent = 0; iAgent < _P.size(); iAgent++){
+    //     for (uint16_t jAgent = 0; jAgent < _P.size(); jAgent++){
+    //         for (uint16_t iState = 0; iState < EKF_ST_DIM; iState++){
+    //             for (uint16_t jState = 0; jState < EKF_ST_DIM; jState++){
+    //                 _P[iAgent][jAgent].data[iState][jState] = 0;
+    //             }
+    //         }
+    //         _P[iAgent][jAgent].data[EKF_ST_X][EKF_ST_X] = STDEV_INITIAL_POS_XY;
+    //         _P[iAgent][jAgent].data[EKF_ST_Y][EKF_ST_Y] = STDEV_INITIAL_POS_XY;
+    //     }
+    // }
     _mirror_state = _state;
     _mirror_P = _P;
     for (uint16_t iAgent = 0; iAgent < _state.size(); iAgent++){
         // _mirror_state.push_back(_state[iAgent]);
+        _mirror_state[iAgent][EKF_ST_X] = -_mirror_state[iAgent][EKF_ST_X];
         _mirror_state[iAgent][EKF_ST_Y] = -_mirror_state[iAgent][EKF_ST_Y];
-        _mirror_state[iAgent][EKF_ST_PSI] = 2*M_PI - _mirror_state[iAgent][EKF_ST_PSI];
         // _mirror_P.push_back(_P[iAgent]);
     }
     // float trace = 0;
@@ -526,3 +567,4 @@ void FullEKF::select_mirror(){
     _next_mirror_check += MIRROR_END_TIME;
     // mirror_is_init = false;
 }
+

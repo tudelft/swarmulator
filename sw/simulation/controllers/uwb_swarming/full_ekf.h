@@ -12,6 +12,8 @@
 // #include "swarm_storage.h"
 #include "rel_loc_estimator.h"
 
+
+
 /** 
  * @brief EKF with a single state vector for all agents that can
  * therefore use indirect measurements. Possible behaviours:
@@ -35,13 +37,10 @@ private:
     float _direct_error;
     float _mirror_direct_error;
     float _next_mirror_check;
-    /**
-     * @brief Get the index at which the state/input/covariance for the agent with given
-     * is stored. Returns false if the id is not currently tracked by the filter.
-     *
-     * @param id 
-     * @param index
-     */
+
+    bool _decouple_agents;
+    bool _stay_decoupled;
+    void reset();
 
     bool update_with_direct_range(const ekf_range_measurement_t &meas, std::vector<std::vector<float>> &state, std::vector<std::vector<MatrixFloat>> &P, float* error_accum);
     bool update_with_indirect_range(const ekf_range_measurement_t &meas, std::vector<std::vector<float>> &state, std::vector<std::vector<MatrixFloat>> &P);
@@ -49,7 +48,7 @@ private:
     void remove_agent(const uint16_t agent_id);
     // add agent at an empty position in the vectors. Position CANNOT be
     // specified, but is returned in idx. Returns false if agent couldn't be added.
-    bool add_agent(const uint16_t agent_id, const float agent_rssi, uint16_t *idx);
+    bool add_agent(const uint16_t agent_id, const float agent_rssi, const float x0, const float y0, const float var_x, const float var_y, uint16_t *idx);
 
     void clip_covariance(std::vector<std::vector<MatrixFloat>> &P);
     bool assert_covariance_valid(std::vector<std::vector<MatrixFloat>> &P);
@@ -65,7 +64,7 @@ public:
      * @param nagents Number of agents to range to
      * @param selfID id of the agent on which the EKF is running
      */
-    FullEKF(const uint16_t nagents, const uint16_t selfID, const std::string name);
+    FullEKF(const uint16_t nagents, const uint16_t selfID, const bool decouple_agents, const std::string name);
 
     void step(const float time, ekf_input_t &self_input);
     void predict(float time, std::vector<std::vector<float>> &state, std::vector<std::vector<MatrixFloat>> &P);

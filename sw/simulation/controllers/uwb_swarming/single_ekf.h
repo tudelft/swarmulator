@@ -21,6 +21,9 @@ private:
     
     void clip_covariance();
     void check_state_valid();
+
+    bool add_agent(const uint16_t agent_id, const float agent_rssi, const float x0, const float y0, const float var_x, const float var_y, uint16_t *idx);
+
     
 public:
     /**

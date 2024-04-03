@@ -1,6 +1,11 @@
 #include "rel_loc_estimator.h"
 
 #include "draw.h"
+#include "trigonometry.h"
+
+
+
+
 
 RelLocEstimator::RelLocEstimator(const uint16_t nagents, const uint16_t self_id, const std::string name)
 {
@@ -10,13 +15,13 @@ RelLocEstimator::RelLocEstimator(const uint16_t nagents, const uint16_t self_id,
     _last_prediction_time = 0;
 
     // initialize own input to zero
-    _self_input[EKF_IN_PX] = 0.0;
-    _self_input[EKF_IN_PY] = 0.0;
-    _self_input[EKF_IN_DPSI] = 0.0;
+    _self_input[EKF_IN_VX] = 0.0;
+    _self_input[EKF_IN_VY] = 0.0;
 
     for (uint16_t iAgent=0; iAgent<nagents; iAgent++){
         _state.push_back(std::vector<float>(EKF_ST_DIM));
-        _input.push_back(std::vector<float>(EKF_ST_DIM));
+        _input.push_back(std::vector<float>(EKF_IN_DIM));
+        _cov.push_back(std::vector<float>(EKF_IN_DIM));
         _ids.push_back(self_id);
         _rssi.push_back(0.0f);
         _last_seen.push_back(0.0f);
@@ -113,12 +118,21 @@ void RelLocEstimator::update_performance(std::vector<uint16_t> &ids_in_comm_rang
 void RelLocEstimator::animate(const uint16_t target_ID){
     draw d;
     uint16_t storage_id;
-
     if (get_index(target_ID, &storage_id)){
-        d.estimate(target_ID, 
+        // float x_l, y_l;
+        // rotate_g2l_xy(_state[storage_id][EKF_ST_X], _state[storage_id][EKF_ST_Y],
+        //             agents[_self_id]->state[STATE_YAW], x_l, y_l);        
+        // d.estimate(target_ID, x_l,y_l, 0);
+        // d.estimate(target_ID, 
+        //             _state[storage_id][EKF_ST_X],
+        //             _state[storage_id][EKF_ST_Y],
+        //             0);
+        d.estimate_with_cov(target_ID, 
                     _state[storage_id][EKF_ST_X],
                     _state[storage_id][EKF_ST_Y],
-                    _state[storage_id][EKF_ST_PSI]);
+                    0, 
+                    sqrtf(_cov[storage_id][EKF_ST_X]),
+                    sqrtf(_cov[storage_id][EKF_ST_Y]));
     }
 }
 
@@ -126,11 +140,16 @@ bool RelLocEstimator::assert_state_valid(){
     bool valid = true;
     for (uint8_t i=0; i<_state.size(); i++){
         if (_state[i][EKF_ST_X] > 1000 || _state[i][EKF_ST_X] < -1000 
-            || _state[i][EKF_ST_Y] > 1000 || _state[i][EKF_ST_Y] < -1000
-            || _state[i][EKF_ST_PSI] > 10 || _state[i][EKF_ST_PSI] < -10){
+            || _state[i][EKF_ST_Y] > 1000 || _state[i][EKF_ST_Y] < -1000){
             valid = false;
+            break;
         }
-
+        if (isnan(_state[i][EKF_ST_X]) || isinf(_state[i][EKF_ST_X]) || 
+            isnan(_state[i][EKF_ST_Y]) || isinf(_state[i][EKF_ST_Y])){
+            valid = false;
+            break;
+        }
+        
     }
     return valid;
 }

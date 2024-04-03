@@ -16,7 +16,7 @@
 #include "terminalinfo.h"
 
 
-#define COMMAND_LOCAL 1
+// #define COMMAND_LOCAL 1
 #define RANGING_TIMEOUT_TICKS 100
 #define BASE_RANGING_PING_INTERVAL 0.01f
 #define CMD_INTERVAL 0.1f
@@ -35,13 +35,17 @@ private:
   terminalinfo console_print;
   uint8_t _ranging_mode;
   float _last_velocity_update;
-  float _current_vx;
-  float _current_vy;
+  float _current_target_x;
+  float _current_target_y;
+  float _total_distance_to_target;
+  float _current_ideal_speed;
   bool _avoiding_collision;
-  float _last_ping_tx_seconds;
+  float _next_ping_tx_seconds;
   float _last_ekf_seconds;
+  float _ref_time;
+
   // SwarmStorage _swarm;
-  SwarmRanging _ranging;
+  // SwarmRanging _ranging;
 
   RelLocEstimator *_p_ekf[ESTIMATOR_MAX];
   // FullEKF *_p_ekf_ref;

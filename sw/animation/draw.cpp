@@ -2,13 +2,17 @@
 #include "trigonometry.h"
 #include <cmath>
 #include "fitness_functions.h"
+#include <iomanip>
 
+
+color3ub white = {255,255,255};
 
 color3ub green = {83, 255, 48};
 color3ub yellow = {245, 220, 34};
 color3ub orange = {255, 147, 42};
 
-color3ub cyan = {52, 237, 250};
+// color3ub cyan = {52, 237, 250};
+color3ub cyan = {16, 205, 230}; // darker
 color3ub red = {200, 0, 0};
 
 
@@ -61,13 +65,24 @@ void draw::axis_label()
 
 void draw::agent_number(const uint16_t &ID)
 {
-  glRasterPos2f(-0.01, 0.035);
+  glRasterPos2f(-0.03, 0.1);
   glColor3f(1.0, 1.0, 1.0); // Background color
 
   std::stringstream ss;
   ss << (int)ID;
   glutBitmapString(GLUT_BITMAP_8_BY_13, (unsigned char *)ss.str().c_str());
 }
+
+void draw::agent_number_with_text(const uint16_t &ID, const std::stringstream &text)
+{
+  glRasterPos2f(-0.03, 0.1);
+  glColor3f(1.0, 1.0, 1.0); // Background color
+
+  std::stringstream ss;
+  ss << (int)ID << text.str();
+  glutBitmapString(GLUT_BITMAP_8_BY_13, (unsigned char *)ss.str().c_str());
+}
+
 
 void draw::triangle(const float &scl)
 {
@@ -173,12 +188,15 @@ void draw::line(const float &x, const float &y, const float &width, const color3
 }
 
 
-void draw::point()
+void draw::point(const float &scl, const color3ub &color)
 {
-  glPointSize(10.0);
+  glPointSize(scl);
   glBegin(GL_POINTS);
+  glColor3ub(color.r, color.g, color.b);
   glVertex3f(0, 0, 0);
   glEnd();
+
+  glColor3ub(255, 255, 255); // White
 }
 
 void draw::axes()
@@ -216,7 +234,7 @@ void draw::segment(const float &x0, const float &y0, const float &x1, const floa
 
 void draw::segment(const float &x0, const float &y0, const float &x1, const float &y1, const color3ub &color)
 {
-  glLineWidth(2);
+  glLineWidth(0.8);
   glBegin(GL_LINES);
   glColor3ub(color.r, color.g, color.b);
   glVertex3f(x0 * xrat, y0 * yrat, 0.0);
@@ -248,10 +266,11 @@ void draw::velocity_arrow(const uint16_t &ID, const float &x, const float &y, co
 
 void draw::food(const float &x, const float &y)
 {
+  float scale = 10.0;
   glPushMatrix();
   glTranslatef(y * xrat, x * yrat, 0.0);
   glRotatef(90, 0.0, 0.0, 1.0);
-  point();
+  point(scale, white);
   glPopMatrix();
 }
 
@@ -273,15 +292,33 @@ void draw::agent_raw(const uint16_t ID, const float x, const float y, const floa
   glPopMatrix();
 }
 
+
 void draw::estimate(const uint16_t &ID, const float &rel_x, const float &rel_y, const float &rel_psi)
 {
-  float scale = 0.2;
+  float scale = 6.0;
   glPushMatrix();
   // glTranslatef(rel_x, -rel_y, 0.0); // ENU to NED
   // glRotatef(rad2deg(-rel_psi), 0.0, 0, 1);
   glTranslatef(rel_x, rel_y, 0.0); // ENU to NED
   glRotatef(rad2deg(rel_psi), 0.0, 0, 1);
-  triangle(scale, cyan);
+  // triangle(scale, cyan);
+  point(scale, cyan);
   agent_number(ID);
+  glPopMatrix();
+}
+
+void draw::estimate_with_cov(const uint16_t &ID, const float &rel_x, const float &rel_y, const float &rel_psi, const float &cov_x, const float &cov_y)
+{
+  float scale = 6.0;
+  glPushMatrix();
+  // glTranslatef(rel_x, -rel_y, 0.0); // ENU to NED
+  // glRotatef(rad2deg(-rel_psi), 0.0, 0, 1);
+  glTranslatef(rel_x, rel_y, 0.0); // ENU to NED
+  glRotatef(rad2deg(rel_psi), 0.0, 0, 1);
+  // triangle(scale, cyan);
+  point(scale, cyan);
+  std::stringstream ss;
+  ss << " (" << std::fixed << std::setprecision(3) << cov_x << "," << cov_y << ")";
+  agent_number_with_text(ID, ss);
   glPopMatrix();
 }

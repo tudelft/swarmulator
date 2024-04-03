@@ -45,8 +45,6 @@ class UltraWidebandChannel
     terminalinfo console_print;
 private:
     std::vector<uint8_t> agent_joined;
-    std::vector<std::vector<swarm_ranging_ping_t>> delivery_queues;
-    std::vector<swarm_ranging_ping_t> all_pings;
     std::vector<std::vector<uint8_t>> ranging_status;
     std::vector<std::vector<float>> last_status_change;
     std::vector<std::vector<float>> distance_matrix; // matrix with ranging measurements
@@ -66,17 +64,7 @@ public:
      * Send a swarm ranging ping
      */
     void send_srp(const swarm_ranging_ping_t &srp);
-
-    /**
-     * Receive swarm ranging pings send in communication range
-     */
-    bool receive_srp(const uint16_t receiverID, std::vector<swarm_ranging_ping_t> *srp, std::vector<float> *rssi);
     
-    /**
-     * Receive all swarm ranging pings sent in the simulation
-     */
-    bool receive_all_srp(std::vector<swarm_ranging_ping_t> *srp);
-
     /**
      * Propagate the channel, creating new measurements
      */
