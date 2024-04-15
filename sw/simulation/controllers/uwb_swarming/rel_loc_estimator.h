@@ -31,28 +31,9 @@ struct performance_metrics_t {
 class RelLocEstimator
 {
 protected:
-    // START mirror stuff (possibly remove later)
-    // small variations during initialization can cause the 
-    // estimate to be mirrored, we can fix this during initialization
-    // by comparing the change of P in the regular and mirrored estimate
-    std::vector<std::vector<MatrixFloat>> _mirror_P;
-    std::vector<std::vector<float>> _mirror_state;
-
-    float _direct_error;
-    float _mirror_direct_error;
-    float _next_mirror_check;
-
-    bool mirror_is_init;
-    void init_mirror(); // initialize the mirrored state
-    void select_mirror(); // check which estimate is better and move it to the main state
-    // END mirror stuff
-
     uint16_t _self_id;
     uint16_t _n_agents;
     uint8_t _est_type;
-
-    bool _always_decouple;
-    bool _perfect_initialization;
     
     float _last_prediction_time;
     float _last_reset_time;
@@ -119,9 +100,9 @@ protected:
      */
     bool initialize_agent(const uint16_t agent_id, uint16_t *idx);
 
-    void predict(float time, std::vector<std::vector<float>> &state, std::vector<std::vector<MatrixFloat>> &P, bool decouple_agents);
-    bool update_with_direct_range(const ekf_range_measurement_t &meas, std::vector<std::vector<float>> &state, std::vector<std::vector<MatrixFloat>> &P, float* error_accum, bool decouple_agents);
-    bool update_with_indirect_range(const ekf_range_measurement_t &meas, std::vector<std::vector<float>> &state, std::vector<std::vector<MatrixFloat>> &P);
+    void predict();
+    bool update_with_direct_range(const ekf_range_measurement_t &meas);
+    bool update_with_indirect_range(const ekf_range_measurement_t &meas);
 
 
     bool assert_state_valid();
