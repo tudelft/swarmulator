@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "main.h"
+#include "ekf_types.h"
 
 AgentInitializer::AgentInitializer(const uint16_t self_id){
     _self_id = self_id;
@@ -69,7 +70,7 @@ void AgentInitializer::add_range(const uint16_t id, const float range, const flo
     }
 }
 
-bool AgentInitializer::get_initial_position(const uint16_t id, const float time_now, float *x0, float *y0, float *var_x, float *var_y){
+bool AgentInitializer::get_initial_position(const uint16_t id, const float time_now, agent_initialization_data_t* init_data){
     bool success = false;
     uint16_t idx;
     if (get_index(id, &idx)){
@@ -241,10 +242,12 @@ bool AgentInitializer::get_initial_position(const uint16_t id, const float time_
                     std::cout << "Initializer - Large Variance encountered (avg)" << std::endl;
                 }
             }
-            *x0 = x0loc;
-            *y0 = y0loc;
-            *var_x = varx_loc;
-            *var_y = vary_loc;
+            init_data->id = id;
+            init_data->x0 = x0loc;
+            init_data->y0 = y0loc;
+            init_data->stdev_x = sqrtf(varx_loc);
+            init_data->stdev_y = sqrtf(vary_loc);
+            init_data->timestamp = time_now;
             reset_slot(idx);
             success = true;
         }

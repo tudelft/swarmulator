@@ -307,7 +307,7 @@ void draw::estimate(const uint16_t &ID, const float &rel_x, const float &rel_y, 
   glPopMatrix();
 }
 
-void draw::estimate_with_cov(const uint16_t &ID, const float &rel_x, const float &rel_y, const float &rel_psi, const float &cov_x, const float &cov_y)
+void draw::estimate_with_cov(const uint16_t &ID, const float &rel_x, const float &rel_y, const float &rel_psi, const float &cov_x, const float &cov_y, const float &det_cov)
 {
   float scale = 6.0;
   glPushMatrix();
@@ -318,7 +318,7 @@ void draw::estimate_with_cov(const uint16_t &ID, const float &rel_x, const float
   // triangle(scale, cyan);
   point(scale, cyan);
   std::stringstream ss;
-  ss << " (" << std::fixed << std::setprecision(3) << cov_x << "," << cov_y << ")";
+  ss << " (" << std::fixed << std::setprecision(3) << cov_x << "," << cov_y << "||" << det_cov << ")";
   agent_number_with_text(ID, ss);
   glPopMatrix();
 }

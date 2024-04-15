@@ -166,7 +166,7 @@ public:
   void food(const float &x, const float &y);
 
   void estimate(const uint16_t &ID, const float &rel_x, const float &rel_y, const float &rel_psi);
-  void estimate_with_cov(const uint16_t &ID, const float &rel_x, const float &rel_y, const float &rel_psi, const float &cov_x, const float &cov_y);
+  void estimate_with_cov(const uint16_t &ID, const float &rel_x, const float &rel_y, const float &rel_psi, const float &cov_x, const float &cov_y, const float &det_cov);
 
 };
 

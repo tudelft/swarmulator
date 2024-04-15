@@ -3,9 +3,12 @@
 #include "draw.h"
 #include "trigonometry.h"
 
-#define INITIALIZATION_PERIOD 30 // don't use indirect measurements during initialization
+#define EKF_INITIALIZATION_PERIOD 10 // don't use indirect measurements during initialization
+#define AGENT_INIT_PERIOD 1 // Time during which an agent is not updated with indirect measurements
 #define REL_LOC_TIMEOUT 2 // time after which an agent can be discarded [s]
 
+#define NIS_WINDOW_SIZE 20 // Number of normalized innovation errors kept in memory
+#define NIS_GRACE_PERIOD 8 // Time before agent can be removed based on bad NIS
 #define MIRROR_END_TIME 30 // during initialization, a mirrored estimate is also calculated
 
 
@@ -16,12 +19,41 @@ static float meas_noise_uwb = MEAS_NOISE_UWB;
  * Constructor *
  ***************/
 
-RelLocEstimator::RelLocEstimator(const uint16_t self_id, const uint16_t nagents, bool decouple_agents, const std::string name)
+RelLocEstimator::RelLocEstimator(const uint16_t self_id, uint8_t est_type)
 {
     _self_id = self_id;
-    _n_agents = nagents;
-    _always_decouple = decouple_agents;
-    _name = name;
+    _est_type = est_type;
+
+    switch (_est_type)
+    {
+    case ESTIMATOR_EKF_REF:
+        _name = "Reference EKF";
+        _n_agents = nagents - 1;
+        _always_decouple = false;
+        _perfect_initialization = true;
+        break;
+    case ESTIMATOR_EKF_FULL:
+        _name = "Full EKF";
+        _n_agents = nagents - 1;
+        _always_decouple = false;
+        _perfect_initialization = false;
+        break;
+    case ESTIMATOR_EKF_DYNAMIC:
+        _name = "Dynamic EKF";
+        _n_agents = 4;
+        _always_decouple = false;
+        _perfect_initialization = false;
+        break;
+    case ESTIMATOR_EKF_DECOUPLED:
+        _name = "Decoupled EKF";
+        _n_agents = nagents - 1;
+        _always_decouple = true;
+        _perfect_initialization = false;
+        break;
+    default:
+        break;
+    }
+
 
     _last_prediction_time = 0;
 
@@ -29,13 +61,17 @@ RelLocEstimator::RelLocEstimator(const uint16_t self_id, const uint16_t nagents,
     _self_input[EKF_IN_VX] = 0.0;
     _self_input[EKF_IN_VY] = 0.0;
 
-    for (uint16_t iAgent=0; iAgent<nagents; iAgent++){
+    for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
         _state.push_back(std::vector<float>(EKF_ST_DIM));
         _input.push_back(std::vector<float>(EKF_IN_DIM));
         _cov.push_back(std::vector<float>(EKF_IN_DIM));
+        _cov_det.push_back(0.0f);
+        _NIS.push_back(std::vector<float>(NIS_WINDOW_SIZE));
+        _mean_NIS.push_back(1.0f);
         _ids.push_back(self_id);
-        _rssi.push_back(0.0f);
+        _last_range.push_back(0.0f);
         _last_seen.push_back(0.0f);
+        _agent_added_timestamp.push_back(0.0f);
         
         _P.push_back(std::vector<MatrixFloat>());
         for (uint16_t jAgent=0; jAgent<_n_agents; jAgent++){
@@ -82,16 +118,17 @@ void RelLocEstimator::enqueue_ranges(std::vector<ekf_range_measurement_t> &range
 
 void RelLocEstimator::step(const float time, ekf_input_t &self_input){
     auto start = std::chrono::high_resolution_clock::now();
+    _current_time = time;
     bool decouple_agents = _always_decouple;
-    if (time-_last_reset_time < INITIALIZATION_PERIOD){
+    if (_current_time-_last_reset_time < EKF_INITIALIZATION_PERIOD){
         decouple_agents = true;
     }
 
     // if (_decouple_agents == false){
-    //     if (!mirror_is_init && time < MIRROR_END_TIME && time > MIRROR_START_TIME){
+    //     if (!mirror_is_init && _current_time < MIRROR_END_TIME && _current_time > MIRROR_START_TIME){
     //         init_mirror();
     //     }
-    //     if (mirror_is_init && time > _next_mirror_check){
+    //     if (mirror_is_init && _current_time > _next_mirror_check){
     //         select_mirror();
     //     }
     // }
@@ -103,33 +140,15 @@ void RelLocEstimator::step(const float time, ekf_input_t &self_input){
     // add other agent's input
     uint16_t idx;
     for (uint16_t iInput=0; iInput<_input_queue.size(); iInput++){
-        if (get_index(_input_queue[iInput].id, &idx)){
-            _input[idx][EKF_IN_VX] = _input_queue[iInput].vx;
-            _input[idx][EKF_IN_VY] = _input_queue[iInput].vy;
-            _rssi[idx] = _input_queue[iInput].rssi;
-            _last_seen[idx] = _input_queue[iInput].timestamp;
-        } else {
-            // agent not yet in state space
-            float x0, y0, var_x, var_y;
-            if (_ag_init->get_initial_position(_input_queue[iInput].id, time, &x0, &y0, &var_x, &var_y)){
-                if(add_agent(_input_queue[iInput].id, _input_queue[iInput].rssi, x0, y0, var_x, var_y, &idx)){
-                    _input[idx][EKF_IN_VX] = _input_queue[iInput].vx;
-                    _input[idx][EKF_IN_VY] = _input_queue[iInput].vy;
-                    _rssi[idx] = _input_queue[iInput].rssi;
-                    _last_seen[idx] = _input_queue[iInput].timestamp;
-                }
-            } else {
-                _ag_init->add_velocities(_input_queue[iInput].id, _input_queue[iInput].vx, _input_queue[iInput].vy, _input_queue[iInput].timestamp);
-            }
-        }
+        process_input(_input_queue[iInput]);
     }
     _input_queue.clear();
     
     // Prediction step
-    if (time > _last_prediction_time + EKF_INTERVAL){
-        predict(time, _state, _P, decouple_agents);
-        if (mirror_is_init){predict(time, _mirror_state, _mirror_P, decouple_agents);}
-        _last_prediction_time = time;
+    if (_current_time > _last_prediction_time + EKF_INTERVAL){
+        predict(_current_time, _state, _P, decouple_agents);
+        if (mirror_is_init){predict(_current_time, _mirror_state, _mirror_P, decouple_agents);}
+        _last_prediction_time = _current_time;
     }
 
     // Measurement updates
@@ -156,6 +175,7 @@ void RelLocEstimator::step(const float time, ekf_input_t &self_input){
     for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
         _cov[iAgent][EKF_ST_X] = _P[iAgent][iAgent].data[EKF_ST_X][EKF_ST_X];
         _cov[iAgent][EKF_ST_Y] = _P[iAgent][iAgent].data[EKF_ST_Y][EKF_ST_Y];
+        _cov_det[iAgent] = fmat_det(_P[iAgent][iAgent]);
     }
 
     if (!assert_state_valid()){
@@ -238,7 +258,7 @@ void RelLocEstimator::animate(const uint16_t target_ID){
                     _state[storage_id][EKF_ST_Y],
                     0, 
                     sqrtf(_cov[storage_id][EKF_ST_X]),
-                    sqrtf(_cov[storage_id][EKF_ST_Y]));
+                    sqrtf(_cov[storage_id][EKF_ST_Y]), _mean_NIS[storage_id]);
     }
 }
 
@@ -259,35 +279,52 @@ bool RelLocEstimator::get_index(const uint16_t id, uint16_t *index){
     return success;
 }
 
-bool RelLocEstimator::add_agent(const uint16_t agent_id, const float agent_rssi, const float x0, const float y0, const float var_x, const float var_y, uint16_t *idx){
+bool RelLocEstimator::add_agent(const agent_initialization_data_t &init_data, uint16_t *idx){
     // Check if agent is already in
-    if (get_index(agent_id, idx)){
+    if (get_index(init_data.id, idx)){
         return false;
     }
-    // Find best index to add: empty > last_seen > rssi
+    // Find best index to add: empty > last_seen > distance
     bool index_found = false;
     uint16_t best_idx = 0;
-    float best_last_seen = 0;
-    float best_rssi = agent_rssi; 
-    for (uint16_t iIdx=0; iIdx < _ids.size(); iIdx++){
-        if (_ids[iIdx] == _self_id){
-            // empty location > best case
+
+    // Check if there is an empty slot
+    for (uint16_t iIdx=0; iIdx<_ids.size(); iIdx++){
+        if(_ids[iIdx] == _self_id){
             best_idx = iIdx;
             index_found = true;
             break;
         }
-        if (_last_seen[iIdx]-simtime_seconds>REL_LOC_TIMEOUT || _last_seen[iIdx]<best_last_seen){
-            // an agent hasn't been seen in a while > also good
-            best_idx = iIdx;
-            best_last_seen = _last_seen[iIdx];
-            index_found = true;
-            continue;
+    }
+
+    // If no index found yet, check if an agent timed out
+    if (index_found == false){
+        float best_last_seen = _current_time;
+        for (uint16_t iIdx=0; iIdx<_ids.size(); iIdx++){
+            if(_current_time - _last_seen[iIdx] > REL_LOC_TIMEOUT && _last_seen[iIdx]<best_last_seen){
+                best_idx = iIdx;
+                best_last_seen = _last_seen[iIdx];
+                index_found = true;
+            }
         }
-        if (best_last_seen == 0 && _rssi[iIdx]<best_rssi && _rssi[iIdx] < 1.1*agent_rssi){
-            // require at least 5% lower rssi for a change (hysteresis)
-            best_idx = iIdx;
-            best_rssi = _rssi[iIdx];
-            index_found = true;
+    }
+
+    // if still no index found, find agent with largest range
+    if (index_found == false){
+        float largest_range = 0; 
+        for (uint16_t iIdx=0; iIdx < _ids.size(); iIdx++){
+            if (_last_range[iIdx]>largest_range){
+                best_idx = iIdx;
+                largest_range = _last_range[iIdx];
+                index_found = true;
+            }
+        }
+        if (index_found){
+            // Hysteresis to avoid frequent switching
+            float new_agent_range = sqrtf(powf(init_data.x0, 2)+powf(init_data.y0, 2));
+            if (largest_range < 1.25*new_agent_range){
+                index_found = false;
+            }
         }
     }
 
@@ -296,10 +333,10 @@ bool RelLocEstimator::add_agent(const uint16_t agent_id, const float agent_rssi,
         //std::cout << _name << " " << _self_id << ": Swapped agent at idx " << best_idx
         //          << ": " << _ids[best_idx] << ">" << agent_id << std::endl;
         *idx = best_idx;
-        _ids[best_idx] = agent_id;
+        _ids[best_idx] = init_data.id;
         
-        _state[best_idx][EKF_ST_X] = x0;
-        _state[best_idx][EKF_ST_Y] = y0;
+        _state[best_idx][EKF_ST_X] = init_data.x0;
+        _state[best_idx][EKF_ST_Y] = init_data.y0;
 
         if(mirror_is_init){
             _mirror_state[best_idx][EKF_ST_X] = _state[best_idx][EKF_ST_X];
@@ -322,11 +359,24 @@ bool RelLocEstimator::add_agent(const uint16_t agent_id, const float agent_rssi,
             }
 
         }
-        _P[best_idx][best_idx].data[EKF_ST_X][EKF_ST_X] = var_x;
-        _P[best_idx][best_idx].data[EKF_ST_Y][EKF_ST_Y] = var_y;
+        _P[best_idx][best_idx].data[EKF_ST_X][EKF_ST_X] = powf(init_data.stdev_x, 2);
+        _P[best_idx][best_idx].data[EKF_ST_Y][EKF_ST_Y] = powf(init_data.stdev_y, 2);
         if (mirror_is_init){
-            _mirror_P[best_idx][best_idx].data[EKF_ST_X][EKF_ST_X] = var_x;
-            _mirror_P[best_idx][best_idx].data[EKF_ST_Y][EKF_ST_Y] = var_y;
+            _mirror_P[best_idx][best_idx].data[EKF_ST_X][EKF_ST_X] = powf(init_data.stdev_x, 2);
+            _mirror_P[best_idx][best_idx].data[EKF_ST_Y][EKF_ST_Y] = powf(init_data.stdev_y, 2);
+        }
+        for (uint16_t iNIS=0; iNIS < NIS_WINDOW_SIZE; iNIS++){
+            _NIS[best_idx][iNIS] = 1.0f;
+        }
+        _mean_NIS[best_idx] = 1.0f;
+
+        _agent_added_timestamp[best_idx] = init_data.timestamp;
+
+        if(_always_decouple && _self_id==0){
+            std::cout<< _name << _self_id << "- Initialized Agent " << init_data.id 
+                << " at (" << init_data.x0 << "," << init_data.y0 
+                << ") - Stdev (" << init_data.stdev_x << "," << init_data.stdev_y << ")" 
+                << std::endl; 
         }
         return true;
     } else {
@@ -342,6 +392,57 @@ void RelLocEstimator::remove_agent(const uint16_t agent_id){
     } else {
         std::cout << _name << ": Could not remove agent " << agent_id << ": Agent not found!" << std::endl;
     }
+}
+
+void RelLocEstimator::process_input(const ekf_input_t &input){
+    uint16_t idx;
+    if (get_index(input.id, &idx) || initialize_agent(input.id, &idx)){
+        _input[idx][EKF_IN_VX] = input.vx;
+        _input[idx][EKF_IN_VY] = input.vy;
+        _last_seen[idx] = input.timestamp;
+    } else {
+        // agent not in state space and can't be added
+        // --> update data in agent-initializer
+        _ag_init->add_velocities(input.id, input.vx, input.vy, input.timestamp);
+        
+    }
+}
+
+bool RelLocEstimator::initialize_agent(const uint16_t agent_id, uint16_t *idx){
+    bool success = false;
+    agent_initialization_data_t init_data;
+    init_data.id = agent_id;
+    init_data.timestamp = _current_time;
+
+    switch (_est_type)
+    {
+    case ESTIMATOR_EKF_REF:
+        // Perfect initialization
+        init_data.x0 = agents[agent_id]->state[STATE_X] - agents[_self_id]->state[STATE_X];
+        init_data.y0 = agents[agent_id]->state[STATE_Y] - agents[_self_id]->state[STATE_Y];
+        init_data.stdev_x = 0.01;
+        init_data.stdev_y = 0.01;
+        success = add_agent(init_data, idx);
+        break;
+    
+    case ESTIMATOR_EKF_DECOUPLED:
+        // "Lazy" initialization
+        init_data.x0 = 0.0f;
+        init_data.y0 = 0.0f;
+        init_data.stdev_x = 100;
+        init_data.stdev_y = 100;
+        success = add_agent(init_data, idx);
+        break;
+
+    default:
+        // geometric initialization from multiple range measurements
+        if (_ag_init->get_initial_position(agent_id, _current_time, &init_data)){
+            success = add_agent(init_data, idx);
+        }
+        break;
+    }
+
+    return success;
 }
 
 void RelLocEstimator::predict(float time, std::vector<std::vector<float>> &state, std::vector<std::vector<MatrixFloat>> &P, bool decouple_agents){
@@ -401,6 +502,7 @@ bool RelLocEstimator::update_with_direct_range(const ekf_range_measurement_t &me
 
     uint16_t idx;
     if (get_index(id_B, &idx)){
+        _last_range[idx] = meas.range;
         float pred = std::sqrt(pow(state[idx][EKF_ST_X],2)+pow(state[idx][EKF_ST_Y],2));
         float error = meas.range-pred;
         *error_accum += abs(error);
@@ -433,6 +535,11 @@ bool RelLocEstimator::update_with_direct_range(const ekf_range_measurement_t &me
                 }
             }
 
+            // normalized innovation squared update
+            for (uint16_t iNIS=0; iNIS<NIS_WINDOW_SIZE-1; iNIS++){
+                _NIS[idx][iNIS] = _NIS[idx][iNIS+1];
+            }
+            _NIS[idx][NIS_WINDOW_SIZE-1] = error*error/HPHT_R;
 
         } else{
             // PHT = [P0i HiT .. Pii HiT .. Pni HiT]T
@@ -464,6 +571,34 @@ bool RelLocEstimator::update_with_direct_range(const ekf_range_measurement_t &me
                     }
                 }
             }
+
+            // normalized innovation squared update
+            for (uint16_t iNIS=0; iNIS<NIS_WINDOW_SIZE-1; iNIS++){
+                _NIS[idx][iNIS] = _NIS[idx][iNIS+1];
+            }
+            _NIS[idx][NIS_WINDOW_SIZE-1] = error*error/HPHT_R;
+
+        }
+        // if (_NIS[idx][NIS_WINDOW_SIZE-1] > 10){
+        //     std::cout << "NIS > 10" << std::endl;
+        // }
+        // if (_NIS[idx][NIS_WINDOW_SIZE-1]<0.01){
+        //     std::cout << "NIS < 0.01" << std::endl;
+        // }
+        float sum_NIS = 0;
+        for (uint16_t iNIS=0; iNIS<NIS_WINDOW_SIZE; iNIS++){
+            sum_NIS += _NIS[idx][iNIS];
+        }
+        _mean_NIS[idx] = sum_NIS/NIS_WINDOW_SIZE;
+        if ( _est_type != ESTIMATOR_EKF_DECOUPLED && (sum_NIS > 45.3) && (meas.timestamp > _last_reset_time + EKF_INITIALIZATION_PERIOD) &&
+                (meas.timestamp > _agent_added_timestamp[idx] + NIS_GRACE_PERIOD)){
+            // outside 99.9% confidence for k=20, flip state to opposite quadrant
+            remove_agent(id_B);
+            // _state[idx][EKF_ST_X] = -_state[idx][EKF_ST_X];
+            // _state[idx][EKF_ST_Y] = -_state[idx][EKF_ST_Y];
+            // for (uint16_t iNIS=0; iNIS<NIS_WINDOW_SIZE; iNIS++){
+            //     _NIS[idx][iNIS] = 1.0;
+            // }
         }
         success = true;
     } else {
@@ -480,6 +615,10 @@ bool RelLocEstimator::update_with_indirect_range(const ekf_range_measurement_t &
     }
     uint16_t agent_i, agent_j;
     if (get_index(meas.id_A, &agent_i) && get_index(meas.id_B, &agent_j)){
+        if ( (meas.timestamp > _agent_added_timestamp[agent_i]-AGENT_INIT_PERIOD)
+            || (meas.timestamp > _agent_added_timestamp[agent_j]-AGENT_INIT_PERIOD)){
+                return false;
+        }
         float pred = std::sqrt(pow(state[agent_j][EKF_ST_X]-state[agent_i][EKF_ST_X],2)
                                 +pow(state[agent_j][EKF_ST_Y]-state[agent_i][EKF_ST_Y],2));
         

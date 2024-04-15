@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include "ekf_types.h"
 
 #define AGENT_INITIALIZER_MAX_SLOTS 5 // Number of agents that are initialized at the same time
 #define INITIALIZER_PERIOD 1
@@ -30,7 +31,7 @@ public:
     void add_velocities(const uint16_t id, const float rel_vx, const float rel_vy, const float time);
     void add_range(const uint16_t id, const float range, const float time);
 
-    bool get_initial_position(const uint16_t id, const float time_now, float *x0, float *y0, float *var_x, float *var_y);
+    bool get_initial_position(const uint16_t id, const float time_now, agent_initialization_data_t* init_data);
 
 };
 

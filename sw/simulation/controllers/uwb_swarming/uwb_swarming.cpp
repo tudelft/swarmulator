@@ -65,10 +65,10 @@ void uwb_swarming::init(const uint16_t ID)
   if (RUN_EKF_ON_ALL_DRONES || ID == 0)
   {
     _p_ekf[ESTIMATOR_NONE] = NULL;
-    _p_ekf[ESTIMATOR_EKF_REF] = new RelLocEstimator(this->ID, nagents - 1, false, "Reference EKF");
-    _p_ekf[ESTIMATOR_EKF_FULL] = new RelLocEstimator(this->ID, nagents - 1, false, "Full EKF");
-    _p_ekf[ESTIMATOR_EKF_DYNAMIC] = new RelLocEstimator(this->ID, nagents-1, false, "Dynamic EKF");    
-    _p_ekf[ESTIMATOR_EKF_DECOUPLED] = new RelLocEstimator(this->ID, nagents - 1, true, "Decoupled EKF");
+    _p_ekf[ESTIMATOR_EKF_REF] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_REF);
+    _p_ekf[ESTIMATOR_EKF_FULL] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_FULL);
+    _p_ekf[ESTIMATOR_EKF_DYNAMIC] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC);    
+    _p_ekf[ESTIMATOR_EKF_DECOUPLED] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DECOUPLED);
 
     _ranging_mode = RANGE_TO_CLOSEST;
   }

@@ -279,7 +279,7 @@ void SwarmRanging::process_ranging_ping(uwb_time_t &rx_time, const swarm_ranging
     ekf_input_t new_input = {.id = (uint16_t) msg.header_s.sourceAddress,
                             .vx = msg.sender.velocities[0]/1000.0f,
                             .vy = msg.sender.velocities[1]/1000.0f,
-                            .rssi = rssi,
+                            //.rssi = rssi,
                             .timestamp = time};
     inputs.push_back(new_input);
 
