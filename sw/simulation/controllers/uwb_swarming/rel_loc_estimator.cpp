@@ -3,12 +3,12 @@
 #include "draw.h"
 #include "trigonometry.h"
 
-#define EKF_INITIALIZATION_PERIOD 10 // don't use indirect measurements during initialization
-#define AGENT_INIT_PERIOD 1 // Time during which an agent is not updated with indirect measurements
-#define REL_LOC_TIMEOUT 2 // time after which an agent can be discarded [s]
+#define EKF_INITIALIZATION_PERIOD 20 // don't use indirect measurements during initialization
+#define AGENT_INIT_PERIOD 2 // Time during which an agent is not updated with indirect measurements
+#define REL_LOC_TIMEOUT 5 // time after which an agent can be discarded [s]
 
 #define NIS_WINDOW_SIZE 20 // Number of normalized innovation errors kept in memory
-#define NIS_GRACE_PERIOD 8 // Time before agent can be removed based on bad NIS
+#define NIS_GRACE_PERIOD 10 // Time before agent can be removed based on bad NIS
 
 
 static float proc_noise_velXY = MEAS_NOISE_VX;
@@ -150,14 +150,17 @@ void RelLocEstimator::step(const float time, ekf_input_t &self_input){
         _cov_det[iAgent] = fmat_det(_P[iAgent][iAgent]);
     }
 
-    if (!assert_state_valid()){
-        std::cout << _name << " " << _self_id << ": State Invalid" << std::endl;
-        reset();
+    for (uint16_t idx=0; idx<_n_agents; idx++){
+        validate_agent(idx);
     }
-    if (!assert_covariance_valid(_P)){
-        std::cout << _name << " " << _self_id << ": Cov Invalid" << std::endl;
-        reset();
-    }
+    // if (!assert_state_valid()){
+    //     std::cout << _name << " " << _self_id << ": State Invalid" << std::endl;
+    //     reset();
+    // }
+    // if (!assert_covariance_valid(_P)){
+    //     std::cout << _name << " " << _self_id << ": Cov Invalid" << std::endl;
+    //     reset();
+    // }
 }
 
 void RelLocEstimator::update_performance(std::vector<uint16_t> &ids_in_comm_range_ordered, std::vector<float> &relX, std::vector<float> &relY){
@@ -531,31 +534,24 @@ bool RelLocEstimator::update_with_direct_range(const ekf_range_measurement_t &me
             _NIS[idx][NIS_WINDOW_SIZE-1] = error*error/HPHT_R;
 
         }
-        // if (_NIS[idx][NIS_WINDOW_SIZE-1] > 10){
-        //     std::cout << "NIS > 10" << std::endl;
-        // }
-        // if (_NIS[idx][NIS_WINDOW_SIZE-1]<0.01){
-        //     std::cout << "NIS < 0.01" << std::endl;
-        // }
+        
         float sum_NIS = 0;
         for (uint16_t iNIS=0; iNIS<NIS_WINDOW_SIZE; iNIS++){
             sum_NIS += _NIS[idx][iNIS];
         }
         _mean_NIS[idx] = sum_NIS/NIS_WINDOW_SIZE;
-        if ( _est_type != ESTIMATOR_EKF_DECOUPLED && (sum_NIS > 45.3) && (meas.timestamp > _last_reset_time + EKF_INITIALIZATION_PERIOD) &&
+        // if ( _est_type != ESTIMATOR_EKF_DECOUPLED && (sum_NIS > 45.3) && 
+        if ( _est_type != ESTIMATOR_EKF_DECOUPLED && (sum_NIS > 100) && 
+                (meas.timestamp > _last_reset_time + EKF_INITIALIZATION_PERIOD) &&
                 (meas.timestamp > _agent_added_timestamp[idx] + NIS_GRACE_PERIOD)){
-            // outside 99.9% confidence for k=20, flip state to opposite quadrant
+            // outside 99.9% confidence for k=20, remove agent to reinitialize
             remove_agent(id_B);
-            // _state[idx][EKF_ST_X] = -_state[idx][EKF_ST_X];
-            // _state[idx][EKF_ST_Y] = -_state[idx][EKF_ST_Y];
-            // for (uint16_t iNIS=0; iNIS<NIS_WINDOW_SIZE; iNIS++){
-            //     _NIS[idx][iNIS] = 1.0;
-            // }
         }
         success = true;
     } else {
         // agent not yet in state space
-        _ag_init->add_range(id_B, meas.range, meas.timestamp);
+        _ag_init->add_direct_range(id_B, meas.range, meas.timestamp);
+        
     }
     return success;
 }
@@ -618,8 +614,82 @@ bool RelLocEstimator::update_with_indirect_range(const ekf_range_measurement_t &
             }
         }
         success = true;
+    } else {
+        // at least one agent not in state space
+        multilat_point_t mlp;
+        if (get_index(meas.id_A, &agent_i)){
+            // agent A is know
+            float stdev_x = sqrtf(_P[agent_i][agent_i].data[EKF_ST_X][EKF_ST_X]);
+            float stdev_y = sqrtf(_P[agent_i][agent_i].data[EKF_ST_Y][EKF_ST_Y]);
+            if (stdev_x < 0.1 && stdev_y < 0.1 && _mean_NIS[agent_i]<0.5){
+                mlp.id_B = meas.id_A;
+                mlp.range = meas.range;
+                mlp.timestamp = meas.timestamp;
+                mlp.x = _state[agent_i][EKF_ST_X];
+                mlp.y = _state[agent_i][EKF_ST_Y];
+                mlp.stdev_x = stdev_x;
+                mlp.stdev_y = stdev_y;
+            }
+            _ag_init->add_multilat_point(meas.id_B, mlp);
+        }
+        if (get_index(meas.id_B, &agent_i)){
+            // agent B is know
+            float stdev_x = sqrtf(_P[agent_i][agent_i].data[EKF_ST_X][EKF_ST_X]);
+            float stdev_y = sqrtf(_P[agent_i][agent_i].data[EKF_ST_Y][EKF_ST_Y]);
+            if (stdev_x < 0.1 && stdev_y < 0.1 && _mean_NIS[agent_i]<0.5){
+                mlp.id_B = meas.id_B;
+                mlp.range = meas.range;
+                mlp.timestamp = meas.timestamp;
+                mlp.x = _state[agent_i][EKF_ST_X];
+                mlp.y = _state[agent_i][EKF_ST_Y];
+                mlp.stdev_x = stdev_x;
+                mlp.stdev_y = stdev_y;
+            }
+            _ag_init->add_multilat_point(meas.id_A, mlp);
+        }
     }
     return success;
+}
+
+void RelLocEstimator::validate_agent(const uint16_t index){
+    bool state_invalid = false;
+    if (_ids[index]==_self_id){
+        // slot empty
+        return;
+    }
+    // check state
+    for (uint16_t iState=0; iState<EKF_ST_DIM; iState++){
+        state_invalid |= isnan(_state[index][iState]);
+        state_invalid |= isinf(_state[index][iState]);
+    }
+
+    // check covariance
+    for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
+        for (uint16_t iState=0; iState<EKF_ST_DIM; iState++){
+            for (uint16_t jState=0; jState<EKF_ST_DIM; jState++){
+                state_invalid |= isnan(_P[iAgent][index].data[iState][jState]);
+                state_invalid |= isinf(_P[iAgent][index].data[iState][jState]);
+                state_invalid |= isnan(_P[index][iAgent].data[iState][jState]);
+                state_invalid |= isinf(_P[index][iAgent].data[iState][jState]);
+            }
+        }
+    }
+
+    if (state_invalid){
+        std::cout << _name << " " << _self_id << ": Invalid State id"<<_ids[index] << std::endl;
+        remove_agent(_ids[index]);
+        for (uint16_t iState=0; iState<EKF_ST_DIM; iState++){
+            _state[index][iState]=0;
+        }
+        for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
+            for (uint16_t iState=0; iState<EKF_ST_DIM; iState++){
+                for (uint16_t jState=0; jState<EKF_ST_DIM; jState++){
+                    _P[iAgent][index].data[iState][jState]=0;
+                    _P[index][iAgent].data[iState][jState]=0;
+                }
+            }
+        }
+    }
 }
 
 bool RelLocEstimator::assert_state_valid(){

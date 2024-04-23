@@ -55,6 +55,21 @@ void draw::data()
   glutBitmapString(GLUT_BITMAP_8_BY_13, (unsigned char *)ss.str().c_str());
 }
 
+void draw::state_text(std::string str)
+{
+  setOrthographicProjection();
+
+  glPushMatrix();
+  glLoadIdentity();
+  glRasterPos2f(15, 15);
+  glColor3ub(255, 255, 255);  // white
+  glutBitmapString(GLUT_BITMAP_8_BY_13, (unsigned char *) str.c_str());
+  glPopMatrix();
+
+  restorePerspectiveProjection();
+}
+
+
 void draw::axis_label()
 {
   glRasterPos2f(3.9 / zoom_scale - center_x, 0.1 / zoom_scale);

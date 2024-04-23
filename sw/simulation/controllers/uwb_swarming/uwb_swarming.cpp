@@ -404,33 +404,49 @@ void uwb_swarming::rel_loc_animation(const uint16_t agent_ID, const uint16_t est
     }
   }
 
-  std::stringstream stream;
-  stream << "Agent " << std::to_string(agent_ID);
+  std::stringstream infostream;
+  std::stringstream statestream;
+
+  infostream << "Agent " << std::to_string(agent_ID);
+  statestream << "States\n";
+
   if (_p_ekf[estimator_ID] != NULL)
   {
-    stream << "\nEstimator " << _p_ekf[estimator_ID]->_name;
-    stream << " - Mean Error:";
-    stream << " C1=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.c1.mean;
-    stream << " C3=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.c3.mean;
-    stream << " C5=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.c5.mean;
-    stream << " ICR=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.icr.mean;
-    stream << " time (us): " << _p_ekf[estimator_ID]->_performance.comp_time_us;
+    infostream << "\nEstimator " << _p_ekf[estimator_ID]->_name;
+    infostream << " - Mean Error:";
+    infostream << " C1=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.c1.mean;
+    infostream << " C3=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.c3.mean;
+    infostream << " C5=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.c5.mean;
+    infostream << " ICR=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.icr.mean;
+    infostream << " time (us): " << _p_ekf[estimator_ID]->_performance.comp_time_us;
     // d.info_text("Agent " + std::to_string(agent_ID) +
     //             "\nEstimator " + _p_ekf[estimator_ID]->_name +
     //             " - Mean Error: N/A" +
     //             "\nLocal UWB Datarate: " + std::to_string((int)(100 * _ranging._evaluator._current_load)) + "% (" + std::to_string((int)(100 * _ranging._evaluator._avg_load)) + "%)");
+    for (uint16_t iAgent=0; iAgent<_p_ekf[estimator_ID]->_n_agents; iAgent++){
+      if (_p_ekf[estimator_ID]->_ids[iAgent]==ID){
+        statestream << "N/A\n"; 
+      } else{
+        statestream << _p_ekf[estimator_ID]->_ids[iAgent] << ": (";
+        statestream << std::fixed << std::setprecision(1);
+        statestream << _p_ekf[estimator_ID]->_state[iAgent][EKF_ST_X] << ",";
+        statestream << _p_ekf[estimator_ID]->_state[iAgent][EKF_ST_Y] << ")\n";
+      }
+    }
   }
   else
   {
-    stream << "\nEstimator None";
-    stream << " - Mean Error: N/A";
+    infostream << "\nEstimator None";
+    infostream << " - Mean Error: N/A";
     // d.info_text("Agent " + std::to_string(agent_ID) +
     //             "\nEstimator None" + 
     //             " - Mean Error: N/A" +
     //             "\nLocal UWB Datarate: " + std::to_string((int)(100 * _ranging._evaluator._current_load)) + "% (" + std::to_string((int)(100 * _ranging._evaluator._avg_load)) + "%)");
   }
-  stream << "\nLocal UWB Datarate: "; 
-  stream << std::to_string((int)(100 * _ranging._evaluator._current_load)) << "%";
-  stream << "(" << std::to_string((int)(100 * _ranging._evaluator._avg_load)) << "%)";
-  d.info_text(stream.str());
+  infostream << "\nLocal UWB Datarate: "; 
+  infostream << std::to_string((int)(100 * _ranging._evaluator._current_load)) << "%";
+  infostream << "(" << std::to_string((int)(100 * _ranging._evaluator._avg_load)) << "%)";
+
+  d.info_text(infostream.str());
+  d.state_text(statestream.str());
 }

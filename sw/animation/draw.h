@@ -117,6 +117,9 @@ public:
    */
   void data();
   void info_text(std::string str);
+  
+  void state_text(std::string str);
+  
   /**
    * Write the x,y label on the global axis along the given dimension dim
    *

@@ -32,7 +32,6 @@ class RelLocEstimator
 {
 protected:
     uint16_t _self_id;
-    uint16_t _n_agents;
     uint8_t _est_type;
     
     float _last_prediction_time;
@@ -44,9 +43,7 @@ protected:
 
     AgentInitializer* _ag_init;
 
-    std::vector<uint16_t> _ids;                 // agent ids corresponding to blocks in the state space. Unused and timed out slots show _self_id
     std::vector<std::vector<float>> _input;     // input vector in blocks (by agent)
-    std::vector<std::vector<float>> _state;     // state vector in blocks (by agent)
     std::vector<std::vector<MatrixFloat>> _P;   // Covariance Matrix in blocks (by agent)
     std::vector<float> _last_seen;
     std::vector<float> _last_range;
@@ -108,9 +105,16 @@ protected:
     bool assert_state_valid();
     bool assert_covariance_valid(std::vector<std::vector<MatrixFloat>> &P);
 
+    void validate_agent(const uint16_t index);
 public:
     std::string _name;
     performance_metrics_t _performance;
+
+    // moved from protected to test some things
+    uint16_t _n_agents;
+    std::vector<uint16_t> _ids;                 // agent ids corresponding to blocks in the state space. Unused and timed out slots show _self_id
+    std::vector<std::vector<float>> _state;     // state vector in blocks (by agent)
+
 
     /**
      * @brief create a new relative localization estimator
