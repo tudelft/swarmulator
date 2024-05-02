@@ -1,6 +1,6 @@
 /**
  * @file ekf_types.h
- * @author Sven Pfeiffer
+ * @author Sven Pfeiffer, MAVLab, TU Delft
  * @date 15 Apr 2024
  * @brief types and definitions for the relative position ekf
  * 
@@ -16,6 +16,7 @@
  * use of the ekf class header file to a minimum.
  * 
  */
+
 #ifndef EKF_TYPES_H
 #define EKF_TYPES_H
 
@@ -71,10 +72,12 @@ struct ekf_range_measurement_t {
  */
 struct agent_initialization_data_t {
   uint16_t id;
+  bool init_by_multilat; // if true, don't need as much time to converge
   float x0;
   float y0;
   float stdev_x;
   float stdev_y;
+  float last_range;
   float timestamp;
 };
 

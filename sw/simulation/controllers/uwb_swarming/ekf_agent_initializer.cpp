@@ -1,11 +1,39 @@
-#include "agent_initializer.h"
+/**
+ * @file ekf_agent_initializer.cpp
+ * @author Sven Pfeiffer, MAVLab, TU Delft
+ * @date 23 Apr 2024
+ * @brief Contains the AgentInitializer class, used to calculate
+ * initial states for the relative ekf
+ * 
+ * The AgentInitializer has several slots in which it collects
+ * the most recent data on agent states. Based on the data
+ * available, it calculates an initial position based on
+ * agent trajectory, or multilateration.
+ * 
+ * Trajectory based initialization makes use of two range
+ * measurements and the accumulated change in relative position
+ * between the range measurements. From the resulting triangle, 
+ * two possible initial positions can be calculated, and the
+ * middle point between them is returned.
+ * 
+ * Multilateration based initialization relies on range 
+ * measurements to at least 3 other drones.
+ * 
+ */
+
+#include "ekf_agent_initializer.h"
 
 #include <math.h>
 #include <iostream>
 
-#include "main.h"
+#include "settings.h"
 #include "ekf_types.h"
 #include "ekf_math.h"
+
+
+/***************
+ * Constructor *
+ ***************/
 
 AgentInitializer::AgentInitializer(const uint16_t self_id){
     _self_id = self_id;
@@ -13,6 +41,82 @@ AgentInitializer::AgentInitializer(const uint16_t self_id){
         reset_slot(iSlot);
     }
 }
+
+/********************
+ * Public Functions *
+ ********************/
+
+void AgentInitializer::add_velocities(const uint16_t id, const float rel_vx, const float rel_vy, const float time){
+    uint16_t idx;
+    if (get_index(id, &idx)){
+        float dt = time - _traj_last_accum_time[idx];
+        _traj_last_accum_time[idx] = time;
+
+        _traj_relX_accum[idx] += dt*rel_vx;
+        _traj_relY_accum[idx] += dt*rel_vy;
+    }
+}
+
+void AgentInitializer::add_direct_range(const uint16_t id, const float range, const float time){
+    uint16_t idx;
+    if (get_index(id, &idx) || add_agent(id, time, &idx)){
+        if (_traj_start_time[idx] != 0){
+            // there's already a first measurement
+            _traj_end_range[idx] = range;
+        }else{
+            _traj_start_time[idx] = time;
+            _traj_start_range[idx] = range;    
+            _traj_last_accum_time[idx] = time;
+        }
+        // Also add as multilateration point
+        multilat_point_t mlp;
+        mlp.id_B = _self_id;
+        mlp.range = range;
+        mlp.x = 0.0f;
+        mlp.y = 0.0f;
+        mlp.stdev_x = 0.0f;
+        mlp.stdev_y = 0.0f;
+        mlp.timestamp = time;
+        add_multilat_point(id, mlp);
+    }
+}
+
+void AgentInitializer::add_multilat_point(const uint16_t id, const multilat_point_t &new_point){
+    uint16_t idx;
+    if(get_index(id, &idx) || add_agent(id, new_point.timestamp, &idx)){
+        for (uint16_t iPoint=0; iPoint<MULTILAT_MAX_POINTS; iPoint++){
+            if (_multilat_pts[idx][iPoint].id_B == new_point.id_B ||
+                    _multilat_pts[idx][iPoint].id_B == id){
+                // Previous measurement from same agent or empty slot
+                _multilat_pts[idx][iPoint].id_B = new_point.id_B;
+                _multilat_pts[idx][iPoint].range = new_point.range;
+                _multilat_pts[idx][iPoint].stdev_x = new_point.stdev_x;
+                _multilat_pts[idx][iPoint].stdev_y = new_point.stdev_y;
+                _multilat_pts[idx][iPoint].x = new_point.x;
+                _multilat_pts[idx][iPoint].y = new_point.y;
+                _multilat_pts[idx][iPoint].timestamp = new_point.timestamp;
+                break;
+            }
+        }
+    }
+}
+
+bool AgentInitializer::get_initial_position(const uint16_t id, const float time_now, agent_initialization_data_t* init_data){
+    bool success = initial_position_from_multilat(id, time_now, init_data);
+    if (success == false){
+        success = initial_position_from_traj(id, time_now, init_data);
+    }
+    if (success){
+        uint16_t idx;
+        get_index(id, &idx);
+        reset_slot(idx);
+    }
+    return success;
+}
+
+/*********************
+ * Private Functions *
+ *********************/
 
 void AgentInitializer::reset_slot(const uint16_t slot_idx){
     _is_used[slot_idx] = false;
@@ -64,75 +168,6 @@ bool AgentInitializer::add_agent(const uint16_t id, const float time_now, uint16
     return false;
 }
 
-
-void AgentInitializer::add_velocities(const uint16_t id, const float rel_vx, const float rel_vy, const float time){
-    uint16_t idx;
-    if (get_index(id, &idx)){
-        float dt = time - _traj_last_accum_time[idx];
-        _traj_last_accum_time[idx] = time;
-
-        _traj_relX_accum[idx] += dt*rel_vx;
-        _traj_relY_accum[idx] += dt*rel_vy;
-    }
-}
-
-void AgentInitializer::add_direct_range(const uint16_t id, const float range, const float time){
-    uint16_t idx;
-    if (get_index(id, &idx) || add_agent(id, time, &idx)){
-        if (_traj_start_time[idx] != 0){
-            // there's already a first measurement
-            _traj_end_range[idx] = range;
-        }else{
-            _traj_start_time[idx] = time;
-            _traj_start_range[idx] = range;    
-            _traj_last_accum_time[idx] = time;
-        }
-        multilat_point_t mlp;
-        mlp.id_B = _self_id;
-        mlp.range = range;
-        mlp.x = 0.0f;
-        mlp.y = 0.0f;
-        mlp.stdev_x = 0.0f;
-        mlp.stdev_y = 0.0f;
-        mlp.timestamp = time;
-        add_multilat_point(id, mlp);
-    }
-}
-
-void AgentInitializer::add_multilat_point(const uint16_t id, const multilat_point_t &new_point){
-    uint16_t idx;
-    if(get_index(id, &idx) || add_agent(id, new_point.timestamp, &idx)){
-        for (uint16_t iPoint=0; iPoint<MULTILAT_MAX_POINTS; iPoint++){
-            if (_multilat_pts[idx][iPoint].id_B == new_point.id_B ||
-                    _multilat_pts[idx][iPoint].id_B == id){
-                // Point empty or previous measurement from same agent
-                _multilat_pts[idx][iPoint].id_B = new_point.id_B;
-                _multilat_pts[idx][iPoint].range = new_point.range;
-                _multilat_pts[idx][iPoint].stdev_x = new_point.stdev_x;
-                _multilat_pts[idx][iPoint].stdev_y = new_point.stdev_y;
-                _multilat_pts[idx][iPoint].x = new_point.x;
-                _multilat_pts[idx][iPoint].y = new_point.y;
-                _multilat_pts[idx][iPoint].timestamp = new_point.timestamp;
-                break;
-            }
-        }
-    }
-}
-
-
-bool AgentInitializer::get_initial_position(const uint16_t id, const float time_now, agent_initialization_data_t* init_data){
-    bool success = initial_position_from_multilat(id, time_now, init_data);
-    if (success == false){
-        success = initial_position_from_traj(id, time_now, init_data);
-    }
-    if (success){
-        uint16_t idx;
-        get_index(id, &idx);
-        reset_slot(idx);
-    }
-    return success;
-}
-
 bool AgentInitializer::initial_position_from_multilat(const uint16_t id, const float time_now, agent_initialization_data_t* init_data){
     bool success = false;
     uint16_t idx;
@@ -144,6 +179,9 @@ bool AgentInitializer::initial_position_from_multilat(const uint16_t id, const f
         for (uint16_t iRow=0; iRow<MULTILAT_MAX_POINTS; iRow++){
             if (_multilat_pts[idx][idx_point].id_B == id){
                 continue;
+            } else if (_multilat_pts[idx][idx_point].timestamp + AGENT_INITIALIZER_TIMEOUT < time_now){
+                // point to old, remove
+                _multilat_pts[idx][idx_point].id_B = id;
             } else{
                 A.data[iRow][0] = 1;
                 A.data[iRow][1] = -2*_multilat_pts[idx][idx_point].x;
@@ -155,7 +193,7 @@ bool AgentInitializer::initial_position_from_multilat(const uint16_t id, const f
             }
         }
 
-        if (idx_point>2){
+        if (idx_point>MULTILAT_MIN_POINTS){
             // enough points for multilateration
             MatrixFloat AT(3,MULTILAT_MAX_POINTS);
             MatrixFloat ATA(3,3);
@@ -169,15 +207,31 @@ bool AgentInitializer::initial_position_from_multilat(const uint16_t id, const f
                 fmat_mult(tmp, b, x);
 
                 init_data->id = id;
+                init_data->init_by_multilat = true;
                 init_data->timestamp = time_now;
                 init_data->x0=x.data[0][0];
                 init_data->y0=x.data[1][0];
                 init_data->stdev_x = 100;
                 init_data->stdev_y = 100;
-                success = true;
-                if (_self_id==0){
-                    std::cout << "Initialized " << id << ": Multilat" << std::endl;
+
+                // information on last range comes from direct measurements
+                if (_traj_end_range[idx] > 0){
+                    init_data->last_range = _traj_end_range[idx];
+                } else if (_traj_start_range[idx] > 0){
+                    init_data->last_range = _traj_start_range[idx];
+                } else {
+                    init_data->last_range = -1;
                 }
+                // if (_self_id == 0){
+                //     std::cout << "[0] Multilat ID" << init_data->id << " from "
+                //     << _multilat_pts[idx][0].id_B << ","
+                //     << _multilat_pts[idx][1].id_B << ","
+                //     << _multilat_pts[idx][2].id_B << ","
+                //     << _multilat_pts[idx][3].id_B << ","
+                //     << _multilat_pts[idx][4].id_B << std::endl;
+                // }
+                reset_slot(idx);
+                success = true;
             }
         }
     }  
@@ -188,8 +242,12 @@ bool AgentInitializer::initial_position_from_traj(const uint16_t id, const float
     bool success = false;
     uint16_t idx;
     if (get_index(id, &idx)){
+        if (_time_added[idx] + AGENT_INITIALIZER_TIMEOUT < time_now){
+            // slot timed out
+            reset_slot(idx);
+        }
         float dt_tot = time_now - _traj_start_time[idx];
-        if (dt_tot >= INITIALIZER_PERIOD &&
+        if (dt_tot >= TRAJECTORY_ACCUM_TIME &&
                 _traj_start_range[idx] > 0 && _traj_end_range[idx] > 0){
             float dx, dy, r0, r1, x0loc, y0loc, varx_loc, vary_loc;
             dx = _traj_relX_accum[idx];
@@ -357,17 +415,23 @@ bool AgentInitializer::initial_position_from_traj(const uint16_t id, const float
                 }
             }
             init_data->id = id;
+            init_data->init_by_multilat = false;
             init_data->x0 = x0loc;
             init_data->y0 = y0loc;
             init_data->stdev_x = sqrtf(varx_loc);
             init_data->stdev_y = sqrtf(vary_loc);
             init_data->timestamp = time_now;
+            
+            if (_traj_end_range[idx] > 0){
+                init_data->last_range = _traj_end_range[idx];
+            } else if (_traj_start_range[idx] > 0){
+                init_data->last_range = _traj_start_range[idx];
+            } else {
+                init_data->last_range = -1;
+            }
+
             reset_slot(idx);
             success = true;
-
-            if (_self_id==0){
-                std::cout << "Initialized " << id <<": Traj" << std::endl;
-            }
         }
     }
     return success;
