@@ -14,6 +14,7 @@
 #include "swarm_ranging.h"
 #include "pid.h"
 #include "rel_loc_estimator.h"
+#include "log.h"
 
 #define SENSOR_MAX_RANGE 1.8
 
@@ -42,7 +43,7 @@ uwb_swarming::uwb_swarming() : Controller()
 {
   set_max_sensor_range(SENSOR_MAX_RANGE);
   _last_velocity_update = 0;
-  _next_ping_tx_seconds = BASE_RANGING_PING_INTERVAL + rg.uniform_float(-BASE_RANGING_PING_INTERVAL / 10, BASE_RANGING_PING_INTERVAL / 10);
+  _next_ping_tx_seconds = COMMUNICATION_BASE_INTERVAL + rg.uniform_float(-COMMUNICATION_BASE_INTERVAL / 10, COMMUNICATION_BASE_INTERVAL / 10);
   _last_ekf_seconds = 0;
   _current_target_x = 0;
   _current_target_y = 0;
@@ -260,7 +261,7 @@ void uwb_swarming::state_estimation()
   if (_ref_time >= _next_ping_tx_seconds)
   {
     _ranging.send_ranging_ping(own_input.vx, own_input.vy);
-    _next_ping_tx_seconds = _ref_time + BASE_RANGING_PING_INTERVAL + rg.uniform_float(-BASE_RANGING_PING_INTERVAL / 10, BASE_RANGING_PING_INTERVAL / 10);
+    _next_ping_tx_seconds = _ref_time + COMMUNICATION_BASE_INTERVAL + rg.uniform_float(-COMMUNICATION_BASE_INTERVAL / 10, COMMUNICATION_BASE_INTERVAL / 10);
   }
   _ranging.process_incoming_data(_ref_time);
 

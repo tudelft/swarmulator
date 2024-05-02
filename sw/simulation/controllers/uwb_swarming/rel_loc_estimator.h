@@ -7,7 +7,7 @@
 
 #include "ekf_types.h"
 #include "ekf_math.h"
-#include "agent_initializer.h"
+#include "ekf_agent_initializer.h"
 // #include "swarm_storage.h"
 
 
@@ -38,7 +38,8 @@ protected:
     float _last_reset_time;
     float _current_time; // Reference time for the estimator to ensure all estimators run on the same timeline
 
-    std::vector<ekf_range_measurement_t> _range_queue;
+    std::vector<ekf_range_measurement_t> _direct_range_queue;
+    std::vector<ekf_range_measurement_t> _secondary_range_queue;
     std::vector<ekf_input_t> _input_queue;
 
     AgentInitializer* _ag_init;

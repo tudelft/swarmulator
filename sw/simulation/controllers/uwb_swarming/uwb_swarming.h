@@ -11,13 +11,13 @@
 #include "rel_loc_estimator.h"
 // #include "swarm_storage.h"
 #include "pid.h"
+#include "log.h"
 
 #include "terminalinfo.h"
 
 
 // #define COMMAND_LOCAL 1
 #define RANGING_TIMEOUT_TICKS 100
-#define BASE_RANGING_PING_INTERVAL 0.05f
 #define CMD_INTERVAL 0.1f
 
 #define ANIMATION_TIMEOUT 0.5f
