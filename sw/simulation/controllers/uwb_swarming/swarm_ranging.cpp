@@ -21,6 +21,7 @@ SwarmRanging::SwarmRanging(){
 
 void SwarmRanging::init(const uint16_t ID){
     _self_id = ID;
+    _agents_in_tx_queue = 0;
     environment.uwb_channel.join(_self_id);
 }
 
@@ -51,7 +52,8 @@ uint16_t SwarmRanging::get_storage_index(const uint16_t agent_id){
     }
 
     if (!agent_known){
-        ranging_table_t new_agent = {.id = agent_id};
+        ranging_table_t new_agent = {.id = agent_id,
+                                     .number_in_tx_queue = -1};
         _agents.push_back(new_agent);
         storage_idx = _agents.size()-1;
     }
@@ -72,6 +74,15 @@ bool SwarmRanging::get_tx_time(const uint8_t seq, uwb_time_t &tx_time){
     return seq_is_known;
 }
 
+void SwarmRanging::process_remote_tx_time(ranging_table_t &agentB, const uwb_time_t &tx_time, const uint8_t seq){
+    // remote tx time belongs to either response or report message
+    if (agentB.seq[RESPONSE] == seq){
+        memcpy(&agentB.tx_time[RESPONSE].raw, &tx_time, 5);
+    } else if (agentB.seq[REPORT] == seq){
+        memcpy(&agentB.tx_time[REPORT].raw, &tx_time, 5);
+    }
+}
+
 void SwarmRanging::add_timestamps_response(ranging_table_t &agentB, const uwb_time_t &msg_rx, const srp_source_block_t &src, const srp_agent_block_t &msg_agent_block){
     // Always set reception timestamp to initiate new ranging sequence when poll is too far back
     agentB.seq[RESPONSE] = src.seq;
@@ -80,19 +91,16 @@ void SwarmRanging::add_timestamps_response(ranging_table_t &agentB, const uwb_ti
     if (get_tx_time(msg_agent_block.last_seq, agentB.tx_time[POLL])){
         agentB.seq[POLL] = msg_agent_block.last_seq;
         memcpy(&agentB.rx_time[POLL].raw, &msg_agent_block.last_rx, 5);
-        // std::cout << _self_id << " - add response success " << agentB.id << "|" << (int) src.seq << std::endl;
     } else {
         // poll too far back, remove poll information from table
         agentB.tx_time[POLL].full = 0;
         agentB.rx_time[POLL].full = 0;
-        // std::cout << _self_id << " - add response failed " << agentB.id << "|" << (int) src.seq << std::endl;
     }
 }
 
 void SwarmRanging::add_timestamps_report(ranging_table_t &agentB, const uwb_time_t &msg_rx, const srp_source_block_t &src, const srp_agent_block_t &msg_agent_block){
-    if (src.seq != agentB.seq[RESPONSE]+1){
-        // message does not contain response tx timestamp, add as new response
-        // std::cout << _self_id << " - add report failed " << agentB.id << "|" << (int) src.seq << std::endl;
+    if (agentB.tx_time[RESPONSE].full == 0){
+        // We never got a tx time for the response, use this msg as response instead
         add_timestamps_response(agentB, msg_rx, src, msg_agent_block);
     } else {
         if (get_tx_time(msg_agent_block.last_seq, agentB.tx_time[FINAL])){
@@ -100,7 +108,7 @@ void SwarmRanging::add_timestamps_report(ranging_table_t &agentB, const uwb_time
             agentB.seq[FINAL] = msg_agent_block.last_seq;
             agentB.seq[REPORT] = src.seq;
 
-            memcpy(&agentB.tx_time[RESPONSE].raw, &src.last_tx, 5);
+            // memcpy(&agentB.tx_time[RESPONSE].raw, &src.last_tx, 5);
             memcpy(&agentB.rx_time[FINAL].raw, &msg_agent_block.last_rx, 5);
             memcpy(&agentB.rx_time[REPORT].raw, &msg_rx.raw, 5);
             // std::cout << _self_id << " - add report success " << agentB.id << "|" << (int) src.seq << std::endl;
@@ -115,11 +123,10 @@ void SwarmRanging::add_timestamps_report(ranging_table_t &agentB, const uwb_time
 }
 
 void SwarmRanging::clear_timestamps(ranging_table_t &agentB){
-    for (uint8_t i=0; i<3; i++){
+    for (uint8_t i=0; i<MSG_TYPE_DIM; i++){
         agentB.tx_time[i].full = 0;
         agentB.rx_time[i].full = 0;
     }
-    agentB.rx_time[4].full = 0;
 }
 
 void SwarmRanging::shift_timestamps(ranging_table_t &agentB){
@@ -127,12 +134,13 @@ void SwarmRanging::shift_timestamps(ranging_table_t &agentB){
     agentB.tx_time[POLL] = agentB.tx_time[FINAL];
     agentB.seq[POLL] = agentB.seq[FINAL];
     agentB.rx_time[RESPONSE] = agentB.rx_time[REPORT];
-    agentB.tx_time[RESPONSE].full = 0;
+    agentB.tx_time[RESPONSE] = agentB.tx_time[REPORT];
     agentB.seq[RESPONSE] = agentB.seq[REPORT];
     agentB.rx_time[FINAL].full = 0;
     agentB.tx_time[FINAL].full = 0;
     agentB.rx_time[REPORT].full = 0;
-    agentB.seq[REPORT]= 0;
+    agentB.tx_time[REPORT].full = 0;
+    // agentB.seq[REPORT]= 0;
 }
 
 
@@ -152,12 +160,13 @@ void SwarmRanging::send_ranging_ping(float vx, float vy)
     tx_ping.sender.velocities[1] = (int16_t)(vy * 1000);
 
     // Pick agents to include in ping
+ /*   
     order_by_rssi();
     tx_ping.n_agents = std::min((uint16_t)(_agents.size()), (uint16_t) MAX_AGENTS_IN_PING);
-    
     for (uint8_t i_agent=0; i_agent<tx_ping.n_agents; i_agent++){
         tx_ping.agents[i_agent].id = _agents[i_agent].id;
         tx_ping.agents[i_agent].last_range = _agents[i_agent].last_range_mm;
+        tx_ping.agents[i_agent].last_range = 0;
         _agents[i_agent].last_range_mm = 0; // Only send range once when it is fresh
 
         if (_agents[i_agent].rx_time[REPORT].full != 0){
@@ -171,6 +180,38 @@ void SwarmRanging::send_ranging_ping(float vx, float vy)
             tx_ping.agents[i_agent].last_seq = 0;
         }
     }
+*/    
+
+    tx_ping.n_agents = std::min(_agents_in_tx_queue, MAX_AGENTS_IN_PING);
+    uint8_t ag_slot = 0;
+    for (uint8_t iAgent=0; iAgent<_agents.size(); iAgent++){
+        int n_tx_q = _agents[iAgent].number_in_tx_queue;
+        if ((_agents[iAgent].number_in_tx_queue >=0)
+                && (_agents[iAgent].number_in_tx_queue < tx_ping.n_agents) 
+                && (ag_slot < tx_ping.n_agents)){
+            // this agent needs to be in the message
+            tx_ping.agents[ag_slot].id = _agents[iAgent].id;
+            tx_ping.agents[ag_slot].last_range = _agents[iAgent].last_range_mm;
+            _agents[iAgent].last_range_mm = 0; // Only send range once when it is fresh
+            if (_agents[iAgent].rx_time[REPORT].full != 0){
+                memcpy(&tx_ping.agents[ag_slot].last_rx, _agents[iAgent].rx_time[REPORT].raw, 5);
+                tx_ping.agents[ag_slot].last_seq = _agents[iAgent].seq[REPORT];
+            } else if (_agents[iAgent].rx_time[RESPONSE].full != 0){
+                memcpy(&tx_ping.agents[ag_slot].last_rx, _agents[iAgent].rx_time[RESPONSE].raw, 5);
+                tx_ping.agents[ag_slot].last_seq = _agents[iAgent].seq[RESPONSE];
+            } else {
+                memset(&tx_ping.agents[ag_slot].last_rx, 0, 5);
+                tx_ping.agents[ag_slot].last_seq = 0;
+            }
+
+            _agents[iAgent].number_in_tx_queue = -1; // agent no longer in queue
+            ag_slot++;  // move to next slot in ping
+        } else if (_agents[iAgent].number_in_tx_queue > 0){
+            // agent still in queue, but moves up
+            _agents[iAgent].number_in_tx_queue -= tx_ping.n_agents;
+        }
+    }
+    _agents_in_tx_queue -= tx_ping.n_agents;
 
     environment.uwb_channel.send_srp(tx_ping);
 
@@ -180,7 +221,7 @@ void SwarmRanging::send_ranging_ping(float vx, float vy)
         _seq_history[i] = _seq_history[i-1];
     }
     _seq_history[0] = tx_ping.sender.seq;
-    _tx_history[0].full = 1; // actual tx timestamp
+    _tx_history[0].full = (uint64_t) (simtime_seconds*1000); // actual tx timestamp
 }
 
 
@@ -193,7 +234,7 @@ void SwarmRanging::process_incoming_data(const float time_now)
     // std::vector<swarm_ranging_ping_t> rx_pings;
     // std::vector<float> rx_rssi;
     // environment.uwb_channel.receive_srp(_self_id, &rx_pings, &rx_rssi);
-    uwb_time_t rx_timestamp = {.full = 1};
+    uwb_time_t rx_timestamp = {.full = (uint64_t) (time_now*1000)};
 
     // if (rx_pings.size() == rx_rssi.size()){
     //     for (uint16_t i_ping=0; i_ping<rx_pings.size(); i_ping++){
@@ -275,7 +316,14 @@ void SwarmRanging::process_ranging_ping(uwb_time_t &rx_time, const swarm_ranging
 
     _agents[storage_idx].rssi = rssi;
     _agents[storage_idx].t_last_seen = time;
+    int n_tx_q = _agents[storage_idx].number_in_tx_queue;
+    if (_agents[storage_idx].number_in_tx_queue < 0){
+        // currently no answer scheduled, add to tx queue
+        _agents[storage_idx].number_in_tx_queue = _agents_in_tx_queue;
+        _agents_in_tx_queue++;
+    }
 
+    // Read sender block (ekf inputs)
     ekf_input_t new_input = {.id = (uint16_t) msg.header_s.sourceAddress,
                             .vx = msg.sender.velocities[0]/1000.0f,
                             .vy = msg.sender.velocities[1]/1000.0f,
@@ -283,23 +331,31 @@ void SwarmRanging::process_ranging_ping(uwb_time_t &rx_time, const swarm_ranging
                             .timestamp = time};
     inputs.push_back(new_input);
 
-    bool is_not_ranging = (_agents[storage_idx].tx_time[POLL].full == 0);
+    // Check if we need to know the tx timestamp of the last message
+    uint8_t last_seq = msg.sender.seq-1;
+    uwb_time_t last_tx = {.full = 0};
+    memcpy(&last_tx, &msg.sender.last_tx, 5);
+    process_remote_tx_time(_agents[storage_idx], last_tx, last_seq);
+
+    // Process agent blocks (range measurements)
     for (uint8_t i_agent=0; i_agent<msg.n_agents; i_agent++){
         if(msg.agents[i_agent].id == _self_id){
-            is_not_ranging = false;
+            // this block is for me (timestamps)
             if(_agents[storage_idx].rx_time[RESPONSE].full == 0){
-                // First message from this agent
+                // First message from this agent > RESPONSE type
                 clear_timestamps(_agents[storage_idx]);
                 add_timestamps_response(_agents[storage_idx], rx_time, msg.sender, msg.agents[i_agent]);
             } else if(_agents[storage_idx].rx_time[REPORT].full != 0){
-                // Ranging Table is full already
+                // Ranging Table is full already (2nd REPORT)
                 shift_timestamps(_agents[storage_idx]);
                 add_timestamps_report(_agents[storage_idx], rx_time, msg.sender, msg.agents[i_agent]);                
             } else {
+                // REPORT type
                 add_timestamps_report(_agents[storage_idx], rx_time, msg.sender, msg.agents[i_agent]);
             }
         } else {
-            // enqueue secondary distance measurement
+            // this block is for someone else
+            // (but might contain a secondary range measurement)
             if (msg.agents[i_agent].last_range != 0){
                 ekf_range_measurement_t new_range = {.id_A = (uint16_t) msg.header_s.sourceAddress,
                                                    .id_B = msg.agents[i_agent].id,
@@ -310,8 +366,9 @@ void SwarmRanging::process_ranging_ping(uwb_time_t &rx_time, const swarm_ranging
         }
     }
 
-    if (is_not_ranging){
-        // keep sequence number and rx timestamp
+    if (_agents[storage_idx].rx_time[RESPONSE].full == 0){
+        // There seem to be no valid timestamps for this agent yet
+        // keep sequence number and rx timestamp to start ranging
         _agents[storage_idx].seq[RESPONSE] = msg.sender.seq;
         memcpy(&_agents[storage_idx].rx_time[RESPONSE].raw, &rx_time.raw, 5);
     }
@@ -329,7 +386,10 @@ void SwarmRanging::calculate_direct_ranges(const float time)
              _agents[i_agent].rx_time[FINAL].full == 0 ||
              _agents[i_agent].rx_time[REPORT].full == 0){
             continue;
-        } else {
+        } else if ((_agents[i_agent].rx_time[REPORT].full - _agents[i_agent].tx_time[POLL].full) > (1000 * RANGING_MAX_PERIOD)){
+            // ranging took too long, only shift timestamps and wait for next message
+            shift_timestamps(_agents[i_agent]);
+        }else {
             /*
             // Calculate tof & distance
             float roundA = _agents[i_agent].rx_time[RESPONSE] - _agents[i_agent].tx_time[POLL];
@@ -380,6 +440,7 @@ void SwarmRanging::enqueue_srp(const swarm_ranging_ping_t* srp, const float rssi
 
 void SwarmRanging::rel_loc_animation(const uint16_t ID){
     draw d;
+    uint16_t idA, idB;
     float dx_g, dy_g, dx_l, dy_l;
     float dxA, dyA, dxB, dyB;
     float own_yaw = agents[ID]->state[STATE_YAW];
@@ -390,9 +451,10 @@ void SwarmRanging::rel_loc_animation(const uint16_t ID){
         has_ping = (_agents[i_agent].t_last_seen>simtime_seconds-ANIMATION_TIMEOUT);
         has_range = (_agents[i_agent].t_last_range>simtime_seconds-ANIMATION_TIMEOUT);
 
-        if(has_ping && !(has_range)){
-            dx_g = agents[i_agent]->state[STATE_X] - agents[ID]->state[STATE_X];
-            dy_g = agents[i_agent]->state[STATE_Y] - agents[ID]->state[STATE_Y];
+        if(has_ping){// && !(has_range)){
+            idB = _agents[i_agent].id;
+            dx_g = agents[idB]->state[STATE_X] - agents[ID]->state[STATE_X];
+            dy_g = agents[idB]->state[STATE_Y] - agents[ID]->state[STATE_Y];
             rotate_g2l_xy(dx_g, dy_g, own_yaw, dx_l, dy_l);
             // d.segment(0.0f, 0.0f,dx_l, dy_l, orange);
             d.segment(0.0f, 0.0f,dx_g, dy_g, orange);
@@ -400,7 +462,6 @@ void SwarmRanging::rel_loc_animation(const uint16_t ID){
     }
 
     // draw ranging
-    uint16_t idA, idB;
     for (int i_meas=_animation_buffer.size()-1; i_meas>=0; i_meas--){
         if (_animation_buffer[i_meas].timestamp>simtime_seconds-ANIMATION_TIMEOUT){
             idA = _animation_buffer[i_meas].id_A;
