@@ -15,17 +15,14 @@
 #include "pid.h"
 #include "rel_loc_estimator.h"
 #include "log.h"
+#include "settings.h"
 
-#define SENSOR_MAX_RANGE 1.8
+#define SENSOR_MAX_RANGE 1.8  // Sensor for wall avoidance
 
 #define RANGE_TO_NONE 0
 #define RANGE_TO_CLOSEST 1
 #define RANGE_TO_RANDOM 2
 #define RANGE_TO_ALL 3
-
-#define N_RANGING_TARGETS 2
-
-#define RUN_EKF_ON_ALL_DRONES 1
 
 #define V_MAX 1.0f // m/s
 #define V_RAMPUP_TIME 1.0f // s
@@ -44,7 +41,7 @@ uwb_swarming::uwb_swarming() : Controller()
   set_max_sensor_range(SENSOR_MAX_RANGE);
   _last_velocity_update = 0;
   _next_ping_tx_seconds = COMMUNICATION_BASE_INTERVAL + rg.uniform_float(-COMMUNICATION_BASE_INTERVAL / 10, COMMUNICATION_BASE_INTERVAL / 10);
-  _last_ekf_seconds = 0;
+  _last_estimation_time = -1;
   _current_target_x = 0;
   _current_target_y = 0;
   _total_distance_to_target = 0;
@@ -63,20 +60,13 @@ void uwb_swarming::init(const uint16_t ID)
   // _swarm.init(ID);
   _ranging.init(ID);
 
-  if (RUN_EKF_ON_ALL_DRONES || ID == 0)
-  {
-    _p_ekf[ESTIMATOR_NONE] = NULL;
-    _p_ekf[ESTIMATOR_EKF_REF] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_REF);
-    _p_ekf[ESTIMATOR_EKF_FULL] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_FULL);
-    _p_ekf[ESTIMATOR_EKF_DYNAMIC] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC);    
-    _p_ekf[ESTIMATOR_EKF_DECOUPLED] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DECOUPLED);
+  _p_ekf[ESTIMATOR_NONE] = NULL;
+  _p_ekf[ESTIMATOR_EKF_REF] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_REF);
+  _p_ekf[ESTIMATOR_EKF_FULL] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_FULL);
+  _p_ekf[ESTIMATOR_EKF_DYNAMIC] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC);    
+  _p_ekf[ESTIMATOR_EKF_DECOUPLED] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DECOUPLED);
 
-    _ranging_mode = RANGE_TO_CLOSEST;
-  }
-  else
-  {
-    _ranging_mode = RANGE_TO_CLOSEST;
-  }
+  _ranging_mode = RANGE_TO_CLOSEST;
 
   if (ID != 0)
   {
@@ -89,37 +79,10 @@ void uwb_swarming::init(const uint16_t ID)
     std::stringstream name;
     name << "log_drone_" << this->ID;
     _pFlogger = new FileLogger(name.str());
-    std::stringstream header;
-    header << "time"
-           << ", ref_c1_mean, ref_c3_mean, ref_c3_max, ref_c5_mean, ref_c5_max, ref_icr_mean, ref_icr_max, ref_t_us" 
-           << ", ful_c1_mean, ful_c3_mean, ful_c3_max, ful_c5_mean, ful_c5_max, ful_icr_mean, ful_icr_max, ful_t_us" 
-           << ", dyn_c1_mean, dyn_c3_mean, dyn_c3_max, dyn_c5_mean, dyn_c5_max, dyn_icr_mean, dyn_icr_max, dyn_t_us" 
-           << ", dec_c1_mean, dec_c3_mean, dec_c3_max, dec_c5_mean, dec_c5_max, dec_icr_mean, dec_icr_max, dec_t_us" 
-           << std::endl;
-    _pFlogger->write_data(header);
+    log_write_header();
   #endif
 
 }
-
-// // velocity command random walk fixed wing
-// void uwb_swarming::get_velocity_command(const uint16_t ID, float &v_x, float &psirate)
-// {
-//  // since the simulation time runs on a different thread, to make sure all estimators
-//  // use the same reference time we avoid using simtime_seconds inside the controller
-//  _ref_time = simtime_seconds;
-//   state_estimation();
-
-//   if (_ref_time >= _last_cmd_seconds + 10 * CMD_INTERVAL)
-//   {
-//     _vel_cmd[0] = 0.5;
-//     _psirate_cmd = rg.uniform_float(-0.3 * M_PI, 0.3 * M_PI);
-//     _last_cmd_seconds = _ref_time;
-//   }
-
-//   v_x = _vel_cmd[0];
-//   psirate = _psirate_cmd;
-//   wall_avoidance_turn(ID, v_x, psirate, SENSOR_MAX_RANGE);
-// }
 
 // velocity command go to random points with fixed yaw
 void uwb_swarming::get_velocity_command(const uint16_t ID, float &v_x, float &v_y)
@@ -127,7 +90,10 @@ void uwb_swarming::get_velocity_command(const uint16_t ID, float &v_x, float &v_
   // since the simulation time runs on a different thread, to make sure all estimators
   // use the same reference time we avoid using simtime_seconds inside the controller
   _ref_time = simtime_seconds;
-  state_estimation();
+  if (_ref_time >= _last_estimation_time + EKF_ESTIMATION_INTERVAL){
+    state_estimation();
+    _last_estimation_time = _ref_time;
+  }
   
   float delta_x = _current_target_x - agents[ID]->state[STATE_X];
   float delta_y = _current_target_y - agents[ID]->state[STATE_Y];
@@ -177,71 +143,7 @@ void uwb_swarming::get_velocity_command(const uint16_t ID, float &v_x, float &v_
   // wall_avoidance_turn(ID, v_x, psirate, SENSOR_MAX_RANGE);
 }
 
-/*
-void uwb_swarming::get_velocity_command(const uint16_t ID, float &v_x, float &v_y, float &dpsi)
-{
-  // since the simulation time runs on a different thread, to make sure all estimators
-  // use the same reference time we avoid using simtime_seconds inside the controller
-  _ref_time = simtime_seconds;
-  state_estimation();
 
-  if (_ref_time < 60)
-  {
-    // initialization
-    if (_avoiding_collision || _ref_time >= _last_cmd_seconds + 10 * CMD_INTERVAL)
-    {
-      _vel_cmd[0] = rg.uniform_float(-1, 1);
-      _vel_cmd[1] = rg.uniform_float(-1, 1);
-      _psirate_cmd = 0.0f;
-      _last_cmd_seconds = _ref_time;
-    }
-  }
-  else
-  {
-    // leader
-    if (ID == 0 && (_avoiding_collision || _ref_time >= _last_cmd_seconds + 20 * CMD_INTERVAL))
-    {
-      _vel_cmd[0] = 0.5;
-      _vel_cmd[1] = 0; // rg.uniform_float(-1, 1);
-      _psirate_cmd = rg.uniform_float(-0.2 * M_PI, 0.2 * M_PI);
-      _last_cmd_seconds = _ref_time;
-    }
-
-    // follower
-    if (ID != 0 && (_avoiding_collision || _ref_time >= _last_cmd_seconds + CMD_INTERVAL))
-    {
-      // errors in leader frame
-      float el_x, el_y;
-      uint16_t st_id = _swarm.get_storage_index(0);
-      rotate_l2g_xy(_swarm._agents[st_id].state.relX,
-                    _swarm._agents[st_id].state.relY,
-                    _swarm._agents[st_id].state.relPsi,
-                    el_x, el_y);
-      // desired position in follower frame
-      float des_x, des_y;
-      rotate_g2l_xy(DESIRED_REL_X, DESIRED_REL_Y,
-                    _swarm._agents[st_id].state.relPsi, des_x, des_y);
-
-      // errors in follower frame
-      float e_psi = DESIRED_REL_PSI - _swarm._agents[st_id].state.relPsi;
-      float e_x = des_x - _swarm._agents[st_id].state.relX;
-      float e_y = des_y - _swarm._agents[st_id].state.relY;
-
-      // commands (Proportional control for now)
-      _vel_cmd[0] = _p_rel_pos_pid_x->step(e_x, CMD_INTERVAL);
-      _vel_cmd[1] = _p_rel_pos_pid_y->step(e_y, CMD_INTERVAL);
-      _psirate_cmd = _p_rel_pos_pid_psi->step(e_psi, CMD_INTERVAL);
-      _last_cmd_seconds = _ref_time;
-    }
-  }
-
-  v_x = _vel_cmd[0];
-  v_y = _vel_cmd[1];
-  dpsi = _psirate_cmd;
-  // wall_avoidance_bounce(ID, v_x, v_y, SENSOR_MAX_RANGE);
-  _avoiding_collision = wall_avoidance_xyy(ID, v_x, v_y, dpsi, SENSOR_MAX_RANGE);
-}
-*/
 void uwb_swarming::get_own_input(ekf_input_t &own_input)
 {
   float vx = agents[this->ID]->state[STATE_VX];
@@ -273,30 +175,34 @@ void uwb_swarming::state_estimation()
   std::vector<ekf_input_t> all_inputs;
   _ranging.get_all_ranging(all_measurements, all_inputs, _ref_time);
 
-  if (RUN_EKF_ON_ALL_DRONES || ID == 0)
+  for (uint8_t iEst = 0; iEst < ESTIMATOR_MAX; iEst++)
   {
-    for (uint8_t iEst = 0; iEst < ESTIMATOR_MAX; iEst++)
+    if (_p_ekf[iEst] == NULL)
     {
-      if (_p_ekf[iEst] == NULL)
-      {
-        continue;
-      } else if (iEst == ESTIMATOR_EKF_REF){
-        _p_ekf[ESTIMATOR_EKF_REF]->enqueue_inputs(all_inputs);
-        _p_ekf[ESTIMATOR_EKF_REF]->enqueue_ranges(all_measurements);
-        _p_ekf[ESTIMATOR_EKF_REF]->step(_ref_time, own_input);
-      }
-      else
-      {
-        _p_ekf[iEst]->enqueue_inputs(inputs);
-        _p_ekf[iEst]->enqueue_ranges(measurements);
-        _p_ekf[iEst]->step(_ref_time, own_input);
-      }
+      continue;
+    } else if (iEst == ESTIMATOR_EKF_REF){
+      _p_ekf[ESTIMATOR_EKF_REF]->enqueue_inputs(all_inputs);
+      _p_ekf[ESTIMATOR_EKF_REF]->enqueue_ranges(all_measurements);
+      _p_ekf[ESTIMATOR_EKF_REF]->step(_ref_time, own_input);
+    }
+    else
+    {
+      _p_ekf[iEst]->enqueue_inputs(inputs);
+      _p_ekf[iEst]->enqueue_ranges(measurements);
+      _p_ekf[iEst]->step(_ref_time, own_input);
     }
   }
 
   // Calculate performance indicators
   _ranging._evaluator.calculate_load(_ref_time);
+  calculate_ekf_errors();
+  
+  #ifdef LOG
+    log_write_data();
+  #endif
+}
 
+void uwb_swarming::calculate_ekf_errors(){
   std::vector<uint16_t> ids_in_comm_range_ordered;
   std::vector<float> relX;
   std::vector<float> relY;
@@ -325,6 +231,7 @@ void uwb_swarming::state_estimation()
       }
     }
   }
+  _agents_in_range = ids_in_comm_range_ordered.size();
   for (uint8_t iEst = 0; iEst < ESTIMATOR_MAX; iEst++){
     if (_p_ekf[iEst] == NULL)
       {
@@ -335,21 +242,6 @@ void uwb_swarming::state_estimation()
         _p_ekf[iEst]->update_performance(ids_in_comm_range_ordered, relX, relY);
       }
   }
-  #ifdef LOG
-    std::stringstream data;
-    // data << _ref_time << std::endl; // << ", " << _other_id << ", "
-    //      << dx_l << ", " << dy_l << ", " << dyaw << ", "
-    //      << _state[EKF_ST_X] << ", " << _state[EKF_ST_Y] << ", " << _state[EKF_ST_PSI] << ", "
-    //      << ex << ", " << ey << ", " << epsi << std::endl;
-    data << _ref_time
-          << std::fixed << std::setprecision(2) 
-          << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_REF]->_performance.comp_time_us 
-          << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_FULL]->_performance.comp_time_us 
-          << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_DYNAMIC]->_performance.comp_time_us 
-          << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.c1.mean << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.c3.mean << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.c3.max << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.c5.mean << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.c5.max << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.icr.mean << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.icr.max << "," << _p_ekf[ESTIMATOR_EKF_DECOUPLED]->_performance.comp_time_us 
-          << std::endl;
-    _pFlogger->write_data(data);
-  #endif
 }
 
 void uwb_swarming::animation(const uint16_t ID)
@@ -370,9 +262,9 @@ void uwb_swarming::rel_loc_animation(const uint16_t agent_ID, const uint16_t est
   _ranging.rel_loc_animation(agent_ID);
 
   // // other agents in range, groundtruth
-  float dx_g, dy_g, dx_l, dy_l;
+  float dx_g, dy_g; //, dx_l, dy_l;
   float d_yaw;
-  float own_yaw = agents[agent_ID]->state[STATE_YAW];
+  //float own_yaw = agents[agent_ID]->state[STATE_YAW];
 
   for (uint16_t i_agent = 0; i_agent < agents.size(); i_agent++)
   {
@@ -390,16 +282,6 @@ void uwb_swarming::rel_loc_animation(const uint16_t agent_ID, const uint16_t est
     // d.agent_raw(i_agent, dx_l, dy_l, d_yaw);
     d.agent_raw(i_agent, dx_g, dy_g, d_yaw);
   
-    // Draw estimate
-    // uint16_t storage_id = _swarm.get_storage_index(i_agent);
-    // d.estimate(i_agent, _swarm._agents[storage_id].state.relX,
-    //            _swarm._agents[storage_id].state.relY,
-    //            _swarm._agents[storage_id].state.relPsi);
-    // if(_p_ekf[estimator_ID] != NULL && _p_ekf[estimator_ID]->get_index(i_agent, storage_id)){
-    //   d.estimate(i_agent, _p_ekf[estimator_ID]->_state[storage_id][EKF_ST_X],
-    //                       _p_ekf[estimator_ID]->_state[storage_id][EKF_ST_Y],
-    //                       _p_ekf[estimator_ID]->_state[storage_id][EKF_ST_PSI]);
-    // }
     if(_p_ekf[estimator_ID] != NULL){
       _p_ekf[estimator_ID]->animate(i_agent);
     }
@@ -414,11 +296,12 @@ void uwb_swarming::rel_loc_animation(const uint16_t agent_ID, const uint16_t est
   if (_p_ekf[estimator_ID] != NULL)
   {
     infostream << "\nEstimator " << _p_ekf[estimator_ID]->_name;
-    infostream << " - Mean Error:";
-    infostream << " C1=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.c1.mean;
-    infostream << " C3=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.c3.mean;
-    infostream << " C5=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.c5.mean;
-    infostream << " ICR=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.icr.mean;
+    infostream << " - Abs Mean Error:";
+    infostream << " C1=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.c1.abs_mean;
+    infostream << " C3=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.c3.abs_mean;
+    infostream << " C5=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.c5.abs_mean;
+    infostream << " ICR=" << std::fixed << std::setprecision(2) << _p_ekf[estimator_ID]->_performance.icr.abs_mean;
+    infostream << " n=" << _agents_in_range;
     infostream << " time (us): " << _p_ekf[estimator_ID]->_performance.comp_time_us;
     // d.info_text("Agent " + std::to_string(agent_ID) +
     //             "\nEstimator " + _p_ekf[estimator_ID]->_name +
@@ -450,4 +333,50 @@ void uwb_swarming::rel_loc_animation(const uint16_t agent_ID, const uint16_t est
 
   d.info_text(infostream.str());
   d.state_text(statestream.str());
+}
+
+void uwb_swarming::log_write_header(){
+  std::stringstream header;
+  header << "time";           // col G.0
+  header << "," << "n_icr";   // col G.1
+  header << "," << "uwb_load";// col G.2
+  for (uint8_t iEst = 0; iEst < ESTIMATOR_MAX; iEst++){
+    if (_p_ekf[iEst] != NULL){
+      std::string short_name = _p_ekf[iEst]->_name.substr(0,3);
+      header << "," << short_name << "_c1_abs";   // col E.0
+      header << "," << short_name << "_c1_rel";   // col E.1
+      header << "," << short_name << "_c3_abs";   // col E.2
+      header << "," << short_name << "_c3_rel";   // col E.3
+      header << "," << short_name << "_c5_abs";   // col E.4
+      header << "," << short_name << "_c5_rel";   // col E.5
+      header << "," << short_name << "_icr_abs";  // col E.6
+      header << "," << short_name << "_icr_rel";  // col E.7
+      header << "," << short_name << "_t_us";     // col E.8
+    }
+  }
+  header << std::endl;
+  _pFlogger->write_data(header);
+}
+
+void uwb_swarming::log_write_data(){
+  std::stringstream data;
+  data << _ref_time;                                // col G.0
+  data << "," << _agents_in_range;                  // col G.1
+  data << std::fixed << std::setprecision(3); 
+  data << "," << _ranging._evaluator._current_load; // col G.2
+  for (uint8_t iEst = 0; iEst < ESTIMATOR_MAX; iEst++){
+    if (_p_ekf[iEst] != NULL){
+      data << "," << _p_ekf[iEst]->_performance.c1.abs_mean;  // col E.0
+      data << "," << _p_ekf[iEst]->_performance.c1.rel_mean;  // col E.1
+      data << "," << _p_ekf[iEst]->_performance.c3.abs_mean;  // col E.2
+      data << "," << _p_ekf[iEst]->_performance.c3.rel_mean;  // col E.3
+      data << "," << _p_ekf[iEst]->_performance.c5.abs_mean;  // col E.4
+      data << "," << _p_ekf[iEst]->_performance.c5.rel_mean;  // col E.5
+      data << "," << _p_ekf[iEst]->_performance.icr.abs_mean; // col E.6
+      data << "," << _p_ekf[iEst]->_performance.icr.rel_mean; // col E.7
+      data << "," << _p_ekf[iEst]->_performance.comp_time_us; // col E.8
+    }
+  }
+  data << std::endl;
+  _pFlogger->write_data(data);
 }

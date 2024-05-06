@@ -16,7 +16,8 @@
 
 struct error_stats_t {
     float max;
-    float mean;
+    float abs_mean; // mean of absolute errors
+    float rel_mean; // mean of relative errors
     uint8_t N;
 };
 
@@ -107,6 +108,8 @@ protected:
     bool assert_covariance_valid(std::vector<std::vector<MatrixFloat>> &P);
 
     void validate_agent(const uint16_t index);
+
+    void reset_error_stats();
 public:
     std::string _name;
     performance_metrics_t _performance;

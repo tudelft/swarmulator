@@ -40,8 +40,9 @@ private:
   float _current_ideal_speed;
   bool _avoiding_collision;
   float _next_ping_tx_seconds;
-  float _last_ekf_seconds;
+  float _last_estimation_time;
   float _ref_time;
+  uint16_t _agents_in_range;
 
   // SwarmStorage _swarm;
   // SwarmRanging _ranging;
@@ -64,9 +65,7 @@ private:
   // float _last_air_utilization_calculation;
   // float _time_air_utilization_avg;
 
-  #ifdef LOG
-    FileLogger *_pFlogger;
-  #endif
+  FileLogger *_pFlogger;
 
   /**
    * @brief Construct the ekf_input of this agent
@@ -77,6 +76,14 @@ private:
    * @brief Run the relative position estimator(s)
    */
   void state_estimation();
+
+  /**
+   * @brief Calculate error statistics of the ekf
+   */
+  void calculate_ekf_errors();
+
+  void log_write_header();
+  void log_write_data();
 public:
   /**
    * @brief Construct a new uwb_swarming object
