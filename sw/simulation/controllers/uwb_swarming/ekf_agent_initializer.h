@@ -29,7 +29,7 @@
 #include "ekf_types.h"
 
 // Number of agents that are initialized at the same time
-#define AGENT_INITIALIZER_MAX_SLOTS 1 
+#define AGENT_INITIALIZER_MAX_SLOTS 5 
 
 // Minimum accummulation time for trajcetory based initialization 
 #define TRAJECTORY_ACCUM_TIME 2

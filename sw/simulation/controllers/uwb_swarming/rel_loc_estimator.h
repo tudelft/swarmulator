@@ -54,6 +54,7 @@ protected:
     std::vector<std::vector<float>> _NIS;
     std::vector<float> _mean_NIS;
     std::vector<float> _agent_added_timestamp;
+    std::vector<bool> _use_secondary_range;
     float _self_input[EKF_IN_DIM];
 
     /**
