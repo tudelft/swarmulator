@@ -153,8 +153,8 @@ void RelLocEstimator::step(const float time, ekf_input_t &self_input){
     }
     _secondary_range_queue.clear();
 
-    // if (false){
-    if (_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC){
+    if (false){
+    // if (_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC){
         float nis_all = 0;
         uint16_t count = 0;
         for (uint16_t iAgent=0; iAgent < _n_agents; iAgent++){
@@ -246,10 +246,11 @@ void RelLocEstimator::update_performance(std::vector<uint16_t> &ids_in_comm_rang
         if (pErrorStats != NULL){
             pErrorStats->N = count;
             pErrorStats->max = e_max;
-            if (count > 0){
+            if (count > i){
                 pErrorStats->abs_mean = accumulator_eabs/count;
                 pErrorStats->rel_mean = accumulator_erel/count;
             } else {
+                // no estimate for all N closest drones
                 pErrorStats->abs_mean = -1;
                 pErrorStats->rel_mean = -1;
             }
@@ -558,15 +559,17 @@ bool RelLocEstimator::update_with_direct_range(const ekf_range_measurement_t &me
             sum_NIS += _NIS[idx][iNIS];
         }
         _mean_NIS[idx] = sum_NIS/NIS_WINDOW_SIZE;
-        if ((_mean_NIS[idx] < CHI_SQUARED_20_0975/20.0f) &&
+        if ((_mean_NIS[idx] < CHI_SQUARED_20_0900/20.0f) &&
                 (_current_time > _agent_added_timestamp[idx]+AGENT_INIT_PERIOD)){
             _use_secondary_range[idx] = true;
+        } else {
+            _use_secondary_range[idx] = false;
         }
 
         // if ( _est_type != ESTIMATOR_EKF_DECOUPLED && (sum_NIS > 45.3) && 
         if ( (_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC) 
                 && (_current_time > _agent_added_timestamp[idx] + NIS_GRACE_PERIOD)
-                && (sum_NIS > 100)){ 
+                && (sum_NIS > 150)){ 
             // outside 99.9% confidence for k=20, remove agent to reinitialize
             remove_agent(id_B);
             if(_self_id == 0 && _est_type==ESTIMATOR_EKF_DYNAMIC){
@@ -580,14 +583,14 @@ bool RelLocEstimator::update_with_direct_range(const ekf_range_measurement_t &me
         if (_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC){
         // if ((_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC) 
         //     &&_current_time < _agent_added_timestamp[idx]+COV_INFLATION_PERIOD){
-            if (nis > CHI_SQUARED_1_0900){
+            if (nis > CHI_SQUARED_1_0999){
                 float beta = 2;
                 if (nis < 1){
                     beta = powf((1+sqrtf(nis)),2)/(1+nis);
                 }
                 float U = beta * (meas_noise_uwb_direct + error*error);
                 float alpha = U/HPHT;
-                alpha = std::max(1.0f, alpha/16);
+                alpha = std::max(1.0f, alpha/9);
                 fmat_scalar_mult(_P[idx][idx], alpha);
                 _use_secondary_range[idx] = false;
             }
@@ -700,11 +703,11 @@ bool RelLocEstimator::update_with_indirect_range(const ekf_range_measurement_t &
     }
     uint16_t agent_i, agent_j;
     if (get_index(meas.id_A, &agent_i) && get_index(meas.id_B, &agent_j)){
-        // // Check if either agent still initializing
-        // if ( (meas.timestamp < _agent_added_timestamp[agent_i]+AGENT_INIT_PERIOD)
-        //     && (meas.timestamp < _agent_added_timestamp[agent_j]+AGENT_INIT_PERIOD)){
-        //         return false;
-        // }
+        // Check if either agent still initializing
+        if ( (meas.timestamp < _agent_added_timestamp[agent_i]+AGENT_INIT_PERIOD)
+            && (meas.timestamp < _agent_added_timestamp[agent_j]+AGENT_INIT_PERIOD)){
+                return false;
+        }
 
         // // check if agent is still initializing
         // bool agent_i_valid = (meas.timestamp > _agent_added_timestamp[agent_i]+AGENT_INIT_PERIOD);
@@ -717,7 +720,7 @@ bool RelLocEstimator::update_with_indirect_range(const ekf_range_measurement_t &
         //     return false;
         // }
         if ( (_use_secondary_range[agent_i] == false)
-            || (_use_secondary_range[agent_j] == false) ){
+            && (_use_secondary_range[agent_j] == false) ){
             return false;
         }
         float pred = std::sqrt(pow(_state[agent_j][EKF_ST_X]-_state[agent_i][EKF_ST_X],2)
@@ -771,7 +774,7 @@ bool RelLocEstimator::update_with_indirect_range(const ekf_range_measurement_t &
                 float alpha = U/(HPHT_i+HPHT_2ij+HPHT_j);
                 // float alpha = (U-HPHT_2ij)/(HPHT_i+HPHT_j);
                 // inflate so that measurement is in 2sigma
-                alpha = std::max(1.0f, alpha/4);
+                alpha = std::max(1.0f, alpha/9);
 
                 if (_use_secondary_range[agent_j]){
                     fmat_scalar_mult(_P[agent_i][agent_i], alpha);
