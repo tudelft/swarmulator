@@ -5,8 +5,13 @@
 #include "ekf_math.h"
 #include "chi_squared_tables.h"
 
+#define SECONDARY_OFF_INTERVAL  20
+#define SECONDARY_OFF_TIME 10
+static float next_secondary_switch = 0.0f;
+static bool secondary_on = true;
+
 #define EKF_INITIALIZATION_PERIOD 15 // don't use indirect measurements during initial startup
-#define AGENT_INIT_PERIOD 15 // don't use indirect measurements from a recently added agent
+#define AGENT_INIT_PERIOD 5 // don't use indirect measurements from a recently added agent
 
 #define REL_LOC_TIMEOUT 5 // time after which an agent can be discarded [s]
 #define HYSTERESIS_FACTOR 1.1f // old agent must be that much further away than new agent to be discarded
@@ -17,6 +22,7 @@
 
 #define INPUT_TIMEOUT 1.0f // time after which input is set to 0
 #define INPUT_MAX_NOISE 4.0f // maximum input covariance when input is unknown 
+
 static float proc_noise_velXY = powf(MEAS_NOISE_VX, 2);
 static float meas_noise_uwb_direct = powf(MEAS_NOISE_UWB, 2);
 static float meas_noise_uwb_secondary = powf(MEAS_NOISE_UWB,2);
@@ -146,12 +152,23 @@ void RelLocEstimator::step(const float time, ekf_input_t &self_input){
 
     // Measurement updates secondary ranges
     if ( (_est_type != ESTIMATOR_EKF_DECOUPLED)
-        && (_current_time > _last_reset_time + EKF_INITIALIZATION_PERIOD)) {
+        && (_current_time > _last_reset_time + EKF_INITIALIZATION_PERIOD)
+        && secondary_on) {
         for (uint16_t iMeas=0; iMeas<_secondary_range_queue.size(); iMeas++){
             update_with_indirect_range(_secondary_range_queue[iMeas]);
         }
     }
     _secondary_range_queue.clear();
+
+    if (_current_time > next_secondary_switch){
+        if (secondary_on){
+            secondary_on = false;
+            next_secondary_switch += SECONDARY_OFF_TIME;
+        } else{
+            secondary_on = true;
+            next_secondary_switch += SECONDARY_OFF_INTERVAL;
+        }
+    }
 
     if (false){
     // if (_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC){
@@ -211,18 +228,21 @@ void RelLocEstimator::update_performance(std::vector<uint16_t> &ids_in_comm_rang
     // calculate individual errors for agents in comm range
     for (uint16_t i=0; i<N_icr; i++){
         if(get_index(ids_in_comm_range_ordered[i], &ekf_idx)){
-            ex = _state[ekf_idx][EKF_ST_X] - relX[i];
-            ey = _state[ekf_idx][EKF_ST_Y] - relY[i];
-            e_abs= sqrt(pow(ex, 2) + pow(ey, 2));
-            
-            dist = sqrtf(powf(relX[i],2)+powf(relY[i],2));
-            e_rel = e_abs/dist;
-            
-            accumulator_eabs += e_abs;
-            accumulator_erel += e_rel;
-            count += 1;
-            if (e_abs > e_max){
-                e_max = e_abs;
+            if (_current_time > _agent_added_timestamp[ekf_idx] + 1.5f*AGENT_INIT_PERIOD){
+                // Don't evaluate during init period
+                ex = _state[ekf_idx][EKF_ST_X] - relX[i];
+                ey = _state[ekf_idx][EKF_ST_Y] - relY[i];
+                e_abs= sqrt(pow(ex, 2) + pow(ey, 2));
+                
+                dist = sqrtf(powf(relX[i],2)+powf(relY[i],2));
+                e_rel = e_abs/dist;
+                
+                accumulator_eabs += e_abs;
+                accumulator_erel += e_rel;
+                count += 1;
+                if (e_abs > e_max){
+                    e_max = e_abs;
+                }
             }
         }
 
@@ -570,7 +590,7 @@ bool RelLocEstimator::update_with_direct_range(const ekf_range_measurement_t &me
         if ( (_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC) 
                 && (_current_time > _agent_added_timestamp[idx] + NIS_GRACE_PERIOD)
                 && (sum_NIS > 150)){ 
-            // outside 99.9% confidence for k=20, remove agent to reinitialize
+            // remove agent to reinitialize
             remove_agent(id_B);
             if(_self_id == 0 && _est_type==ESTIMATOR_EKF_DYNAMIC){
                 std::cout << (int) _current_time << " - [0dyn] Removed Ag" << id_B << ": mean NIS="<<_mean_NIS[idx]<<std::endl;

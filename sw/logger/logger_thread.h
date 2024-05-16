@@ -8,6 +8,7 @@
 #include <cctype>
 #include <algorithm>
 #include <ctime>
+#include <filesystem>
 
 #include "main.h"
 #include "txtwrite.h"
@@ -47,7 +48,9 @@ void main_logger_thread()
 {
   // Log filename
   std::string filename;
-  filename = "logs/log_" + identifier + ".txt";
+  std::filesystem::create_directory("logs/" + identifier);
+  filename = "logs/" + identifier + "/" + identifier + ".txt";
+  // filename = "logs/log_" + identifier + ".txt";
 
   // Open the logfile for writing
   std::ofstream logfile;

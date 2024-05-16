@@ -19,6 +19,7 @@
 #define CHI_SQUARED_1_0975    5.02f
 #define CHI_SQUARED_1_0950    3.84f
 #define CHI_SQUARED_1_0900    2.71f
+#define CHI_SQUARED_1_0750    1.32f
 
 
 // 20 DOF
@@ -28,6 +29,7 @@
 #define CHI_SQUARED_20_0975   34.2f
 #define CHI_SQUARED_20_0950   31.4f
 #define CHI_SQUARED_20_0900   28.4f
+#define CHI_SQUARED_20_0750   23.8f
 
 
 

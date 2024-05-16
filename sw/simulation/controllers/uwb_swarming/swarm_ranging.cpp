@@ -185,7 +185,6 @@ void SwarmRanging::send_ranging_ping(float vx, float vy)
     tx_ping.n_agents = std::min(_agents_in_tx_queue, MAX_AGENTS_IN_PING);
     uint8_t ag_slot = 0;
     for (uint8_t iAgent=0; iAgent<_agents.size(); iAgent++){
-        int n_tx_q = _agents[iAgent].number_in_tx_queue;
         if ((_agents[iAgent].number_in_tx_queue >=0)
                 && (_agents[iAgent].number_in_tx_queue < tx_ping.n_agents) 
                 && (ag_slot < tx_ping.n_agents)){
@@ -316,7 +315,6 @@ void SwarmRanging::process_ranging_ping(uwb_time_t &rx_time, const swarm_ranging
 
     _agents[storage_idx].rssi = rssi;
     _agents[storage_idx].t_last_seen = time;
-    int n_tx_q = _agents[storage_idx].number_in_tx_queue;
     if (_agents[storage_idx].number_in_tx_queue < 0){
         // currently no answer scheduled, add to tx queue
         _agents[storage_idx].number_in_tx_queue = _agents_in_tx_queue;
@@ -408,8 +406,10 @@ void SwarmRanging::calculate_direct_ranges(const float time)
                                         + pow(agents[_self_id]->state[STATE_Y] - agents[id]->state[STATE_Y], 2));
             main_mutex.unlock_shared();
 
-
-            range += _rg.gaussian_float(0,MEAS_NOISE_UWB);
+            // limit noise to 6 sigma (e.g. if there's an outlier filter)
+            float noise = _rg.gaussian_float(0,MEAS_NOISE_UWB);
+            noise = std::max(-6*MEAS_NOISE_UWB, std::min(6*MEAS_NOISE_UWB, noise));
+            range += noise;
             _agents[i_agent].last_range_mm = (uint16_t) (range*1000);
             _agents[i_agent].t_last_range = time;
 
@@ -451,7 +451,7 @@ void SwarmRanging::rel_loc_animation(const uint16_t ID){
         has_ping = (_agents[i_agent].t_last_seen>simtime_seconds-ANIMATION_TIMEOUT);
         has_range = (_agents[i_agent].t_last_range>simtime_seconds-ANIMATION_TIMEOUT);
 
-        if(has_ping){// && !(has_range)){
+        if(has_ping && !(has_range)){
             idB = _agents[i_agent].id;
             dx_g = agents[idB]->state[STATE_X] - agents[ID]->state[STATE_X];
             dy_g = agents[idB]->state[STATE_Y] - agents[ID]->state[STATE_Y];
