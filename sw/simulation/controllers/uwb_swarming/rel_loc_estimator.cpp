@@ -37,28 +37,47 @@ RelLocEstimator::RelLocEstimator(const uint16_t self_id, uint8_t est_type)
     _est_type = est_type;
 
     switch (_est_type)
-    {
-    case ESTIMATOR_EKF_REF:
-        _name = "reference ekf";
-        _n_agents = nagents - 1;
-        break;
-    case ESTIMATOR_EKF_FULL:
-        _name = "full ekf";
-        _n_agents = nagents - 1;
-        break;
-    case ESTIMATOR_EKF_DYNAMIC:
-        _name = "dynamic ekf";
-        _n_agents = 7;
-        break;
-    case ESTIMATOR_EKF_DECOUPLED:
-        _name = "decoupled ekf";
-        _n_agents = nagents - 1;
-        break;
-    default:
-        break;
+        {
+        case ESTIMATOR_EKF_REF:
+            _name = "reference ekf";
+            _n_agents = nagents - 1;
+            break;
+        case ESTIMATOR_EKF_FULL:
+            _name = "full ekf";
+            _n_agents = nagents - 1;
+            break;
+        case ESTIMATOR_EKF_DYNAMIC:
+            _name = "dynamic ekf";
+            _n_agents = 10;
+            break;
+        case ESTIMATOR_EKF_DECOUPLED:
+            _name = "decoupled ekf";
+            _n_agents = nagents - 1;
+            break;
+        default:
+            // _name = "none";
+            // _n_agents = 0;
+            break;
+        }
+
+    init();
+}
+
+RelLocEstimator::RelLocEstimator(const uint16_t self_id, uint8_t est_type, uint16_t n_agents, std::string name)
+{
+    _self_id = self_id;
+    _est_type = est_type;
+    if (est_type == ESTIMATOR_EKF_DYNAMIC){
+        _n_agents = n_agents;
+    } else {
+        _n_agents = nagents - 1; // Only dynamic ekf can deal with varied n_agents
     }
+    _name = name;
 
+    init();
+}
 
+void RelLocEstimator::init(){
     _last_prediction_time = 0;
 
     // initialize own input to zero
@@ -73,7 +92,7 @@ RelLocEstimator::RelLocEstimator(const uint16_t self_id, uint8_t est_type)
         _NIS.push_back(std::vector<float>(NIS_WINDOW_SIZE));
         _mean_NIS.push_back(1.0f);
         _use_secondary_range.push_back(false);
-        _ids.push_back(self_id);
+        _ids.push_back(_self_id);
         _last_range.push_back(0.0f);
         _last_seen.push_back(0.0f);
         _agent_added_timestamp.push_back(0.0f);
@@ -82,15 +101,35 @@ RelLocEstimator::RelLocEstimator(const uint16_t self_id, uint8_t est_type)
         for (uint16_t jAgent=0; jAgent<_n_agents; jAgent++){
             _P[iAgent].push_back(MatrixFloat(EKF_ST_DIM, EKF_ST_DIM));
         }
+
+        _performance.mean_NIS_all = 1;
     }
 
     _ag_init = new AgentInitializer(_self_id);
+
+    enable_all_ambiguity_improvements();
     reset();
 }
 
 /********************
  * Public Functions *
  ********************/
+
+void RelLocEstimator::enable_all_ambiguity_improvements(){
+    _enable_improved_initialization = true;
+    _enable_selective_secondary_range = true;
+    _enable_covariance_inflation = true;
+    _enable_withhold_measurements = true;
+    _enable_nis_agent_reset = true;
+}
+
+void RelLocEstimator::disable_all_ambiguity_improvements(){
+    _enable_improved_initialization = false;
+    _enable_selective_secondary_range = false;
+    _enable_covariance_inflation = false;
+    _enable_withhold_measurements = false;
+    _enable_nis_agent_reset = false;
+}
 
 void RelLocEstimator::reset(){
     for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
@@ -152,10 +191,11 @@ void RelLocEstimator::step(const float time, ekf_input_t &self_input){
 
     // Measurement updates secondary ranges
     if ( (_est_type != ESTIMATOR_EKF_DECOUPLED)
-        && (_current_time > _last_reset_time + EKF_INITIALIZATION_PERIOD)
-        && secondary_on) {
-        for (uint16_t iMeas=0; iMeas<_secondary_range_queue.size(); iMeas++){
-            update_with_indirect_range(_secondary_range_queue[iMeas]);
+        && (_current_time > _last_reset_time + EKF_INITIALIZATION_PERIOD)){
+        if ((_enable_withhold_measurements == false) || secondary_on) {
+            for (uint16_t iMeas=0; iMeas<_secondary_range_queue.size(); iMeas++){
+                update_with_indirect_range(_secondary_range_queue[iMeas]);
+            }
         }
     }
     _secondary_range_queue.clear();
@@ -170,24 +210,23 @@ void RelLocEstimator::step(const float time, ekf_input_t &self_input){
         }
     }
 
-    if (false){
-    // if (_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC){
-        float nis_all = 0;
-        uint16_t count = 0;
-        for (uint16_t iAgent=0; iAgent < _n_agents; iAgent++){
-            if ((_ids[iAgent] != _self_id) && (_current_time - _agent_added_timestamp[iAgent] > 2*NIS_GRACE_PERIOD)){
-                nis_all += _mean_NIS[iAgent];
-                count++;
-            }
-        }
-        if (count > 0){
-            nis_all = nis_all/count;
-            // _nis_all would have 20*_n_agents dof, so we're very conservative by using k=20
-            if ( nis_all > CHI_SQUARED_20_0999/20){
-                reset();
-            }
+
+    float nis_all = 0;
+    uint16_t count = 0;
+    for (uint16_t iAgent=0; iAgent < _n_agents; iAgent++){
+        if ((_ids[iAgent] != _self_id) && (_current_time - _agent_added_timestamp[iAgent] > 2*NIS_GRACE_PERIOD)){
+            nis_all += _mean_NIS[iAgent];
+            count++;
         }
     }
+    if (count > 0){
+        _performance.mean_NIS_all = nis_all/count; // 20*_n_agents dof
+        // _nis_all would have 20*_n_agents dof, so we're very conservative by using k=20
+        // nis_all = nis_all/count;
+        // if ( nis_all > CHI_SQUARED_20_0999/20){
+        //     reset();
+        // }
+    }    
 
     auto stop = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop-start);
@@ -402,7 +441,9 @@ bool RelLocEstimator::add_agent(const agent_initialization_data_t &init_data, ui
             _NIS[best_idx][iNIS] = 1.0f;
         }
         _mean_NIS[best_idx] = 1.0f;
-        _use_secondary_range[best_idx] = false;
+        if (_enable_improved_initialization){
+            _use_secondary_range[best_idx] = false;
+        }
 
         _agent_added_timestamp[best_idx] = init_data.timestamp;
         if (init_data.init_by_multilat){
@@ -449,12 +490,22 @@ void RelLocEstimator::process_input(const ekf_input_t &input){
 
 bool RelLocEstimator::initialize_agent(const uint16_t agent_id, uint16_t *idx){
     bool success = false;
+    // init data for "lazy initialization"
     agent_initialization_data_t init_data;
     init_data.id = agent_id;
     init_data.timestamp = _current_time;
+    init_data.x0 = 0.0f;
+    init_data.y0 = 0.0f;
+    init_data.stdev_x = 100;
+    init_data.stdev_y = 100;
 
     switch (_est_type)
     {
+    case ESTIMATOR_EKF_DECOUPLED:
+        // use "lazy initialization"
+        success = add_agent(init_data, idx);
+        break;
+
     case ESTIMATOR_EKF_REF:
         // Perfect initialization
         init_data.x0 = agents[agent_id]->state[STATE_X] - agents[_self_id]->state[STATE_X];
@@ -464,18 +515,14 @@ bool RelLocEstimator::initialize_agent(const uint16_t agent_id, uint16_t *idx){
         success = add_agent(init_data, idx);
         break;
     
-    case ESTIMATOR_EKF_DECOUPLED:
-        // "Lazy" initialization
-        init_data.x0 = 0.0f;
-        init_data.y0 = 0.0f;
-        init_data.stdev_x = 100;
-        init_data.stdev_y = 100;
-        success = add_agent(init_data, idx);
-        break;
-
     default:
-        // geometric initialization from multiple range measurements
-        if (_ag_init->get_initial_position(agent_id, _current_time, &init_data)){
+        if (_enable_improved_initialization){
+            // geometric initialization from multiple range measurements
+            if (_ag_init->get_initial_position(agent_id, _current_time, &init_data)){
+                success = add_agent(init_data, idx);
+            }
+        } else {
+            // use "lazy initialization"
             success = add_agent(init_data, idx);
         }
         break;
@@ -579,15 +626,26 @@ bool RelLocEstimator::update_with_direct_range(const ekf_range_measurement_t &me
             sum_NIS += _NIS[idx][iNIS];
         }
         _mean_NIS[idx] = sum_NIS/NIS_WINDOW_SIZE;
-        if ((_mean_NIS[idx] < CHI_SQUARED_20_0900/20.0f) &&
-                (_current_time > _agent_added_timestamp[idx]+AGENT_INIT_PERIOD)){
-            _use_secondary_range[idx] = true;
-        } else {
+        if ((_enable_selective_secondary_range) 
+                && (_mean_NIS[idx] > CHI_SQUARED_20_0900/20.0f)) {
             _use_secondary_range[idx] = false;
+        } else if ((_enable_improved_initialization) 
+                && (_current_time < _agent_added_timestamp[idx]+AGENT_INIT_PERIOD)){
+            _use_secondary_range[idx] = false;
+        } else {
+            _use_secondary_range[idx] = true;
         }
 
+        // if ((_mean_NIS[idx] < CHI_SQUARED_20_0900/20.0f) &&
+        //         (_current_time > _agent_added_timestamp[idx]+AGENT_INIT_PERIOD)){
+        //     _use_secondary_range[idx] = true;
+        // } else {
+        //     _use_secondary_range[idx] = false;
+        // }
+
         // if ( _est_type != ESTIMATOR_EKF_DECOUPLED && (sum_NIS > 45.3) && 
-        if ( (_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC) 
+        if ( _enable_nis_agent_reset 
+                && (_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC) 
                 && (_current_time > _agent_added_timestamp[idx] + NIS_GRACE_PERIOD)
                 && (sum_NIS > 150)){ 
             // remove agent to reinitialize
@@ -599,10 +657,8 @@ bool RelLocEstimator::update_with_direct_range(const ekf_range_measurement_t &me
         }
 
         // Covariance inflation
-        // if (false){
-        if (_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC){
-        // if ((_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC) 
-        //     &&_current_time < _agent_added_timestamp[idx]+COV_INFLATION_PERIOD){
+        if ((_enable_covariance_inflation)
+                && (_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC)){
             if (nis > CHI_SQUARED_1_0999){
                 float beta = 2;
                 if (nis < 1){
@@ -658,13 +714,6 @@ bool RelLocEstimator::update_with_direct_range(const ekf_range_measurement_t &me
                 HPHT += HT.data[iState][0]*PHT[idx].data[iState][0];
             }
             float HPHT_R = HPHT + meas_noise_uwb_direct;
-            // // inflate covariance to account for unmodelled correlations
-            // float nis = error*error/HPHT_R;
-            // float beta = 2;
-            // if (nis<1){
-            //     beta = powf((1+sqrtf(nis)),2)/(1+nis);
-            // }
-            // HPHT_R = beta*(HPHT + error*error) + meas_noise_uwb_direct;
 
             // state update (X = X + K(y-h), K=PH^T/(HPH^T+R)
             for (uint16_t iAgent=0; iAgent<_n_agents; iAgent++){
@@ -683,30 +732,8 @@ bool RelLocEstimator::update_with_direct_range(const ekf_range_measurement_t &me
                     }
                 }
             }
-
-            // // normalized innovation squared update
-            // for (uint16_t iNIS=0; iNIS<NIS_WINDOW_SIZE-1; iNIS++){
-            //     _NIS[idx][iNIS] = _NIS[idx][iNIS+1];
-            // }
-            // _NIS[idx][NIS_WINDOW_SIZE-1] = error*error/HPHT_R;
-
         }
-        
-        // float sum_NIS = 0;
-        // for (uint16_t iNIS=0; iNIS<NIS_WINDOW_SIZE; iNIS++){
-        //     sum_NIS += _NIS[idx][iNIS];
-        // }
-        // _mean_NIS[idx] = sum_NIS/NIS_WINDOW_SIZE;
-        // // if ( _est_type != ESTIMATOR_EKF_DECOUPLED && (sum_NIS > 45.3) && 
-        // if ( (_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC) 
-        //         && (_current_time > _agent_added_timestamp[idx] + NIS_GRACE_PERIOD)
-        //         && (sum_NIS > 100)){ 
-        //     // outside 99.9% confidence for k=20, remove agent to reinitialize
-        //     remove_agent(id_B);
-        //     if(_self_id == 0 && _est_type==ESTIMATOR_EKF_DYNAMIC){
-        //         std::cout << (int) _current_time << " - [0dyn] Removed Ag" << id_B << ": mean NIS="<<_mean_NIS[idx]<<std::endl;
-        //     }
-        // }
+    
         success = true;
     } else {
         // agent not yet in state space
@@ -724,7 +751,8 @@ bool RelLocEstimator::update_with_indirect_range(const ekf_range_measurement_t &
     uint16_t agent_i, agent_j;
     if (get_index(meas.id_A, &agent_i) && get_index(meas.id_B, &agent_j)){
         // Check if either agent still initializing
-        if ( (meas.timestamp < _agent_added_timestamp[agent_i]+AGENT_INIT_PERIOD)
+        if ( _enable_improved_initialization 
+            && (meas.timestamp < _agent_added_timestamp[agent_i]+AGENT_INIT_PERIOD)
             && (meas.timestamp < _agent_added_timestamp[agent_j]+AGENT_INIT_PERIOD)){
                 return false;
         }
@@ -766,11 +794,8 @@ bool RelLocEstimator::update_with_indirect_range(const ekf_range_measurement_t &
         }
 
         // Covariance inflation only during init period
-        // if (false){
-        if (_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC){
-        // if ((_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC) &&
-        //     (_current_time < _agent_added_timestamp[agent_i]+COV_INFLATION_PERIOD
-        //      || _current_time < _agent_added_timestamp[agent_j]+COV_INFLATION_PERIOD)){
+        if ((_enable_covariance_inflation)
+                && (_est_type == ESTIMATOR_EKF_FULL || _est_type == ESTIMATOR_EKF_DYNAMIC)){
             float HPHT_i = 0;
             float HPHT_2ij = 0;
             float HPHT_j = 0;
@@ -990,5 +1015,4 @@ void RelLocEstimator::reset_error_stats(){
     _performance.icr.abs_mean = -1;
     _performance.icr.rel_mean = -1;
     _performance.icr.N = 0;
-
 }

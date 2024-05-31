@@ -15,6 +15,11 @@
 
 #include "terminalinfo.h"
 
+// Evaluation modes (only ever activate one)
+// #define EKF_VARIANTS
+// #define EKF_DYNAMIC_NMAX
+#define EKF_FULL_ABLATION
+// end eval modes
 
 // #define COMMAND_LOCAL 1
 #define RANGING_TIMEOUT_TICKS 100
@@ -23,6 +28,11 @@
 #define ANIMATION_TIMEOUT 0.5f
 #define INFO_TEXT_UPDATE 1
 
+#ifdef EKF_FULL_ABLATION
+  #define N_EKF 7
+#else
+  #define N_EKF 4
+#endif
 
 /**
  * Basic exploration behavior which randomly moves in an environment while avoiding neighbors.
@@ -32,7 +42,6 @@ class uwb_swarming: public Controller
 {
 private:
   terminalinfo console_print;
-  uint8_t _ranging_mode;
   float _last_velocity_update;
   float _current_target_x;
   float _current_target_y;
@@ -47,7 +56,7 @@ private:
   // SwarmStorage _swarm;
   // SwarmRanging _ranging;
 
-  RelLocEstimator *_p_ekf[ESTIMATOR_MAX];
+  RelLocEstimator *_p_ekf[N_EKF];
 
   PID * _p_rel_pos_pid_x;
   PID * _p_rel_pos_pid_y;

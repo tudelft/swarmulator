@@ -7,6 +7,7 @@
 #include "terminalinfo.h"
 #include "trigonometry.h"
 #include "rel_loc_estimator.h"
+#include "uwb_swarming.h"
 
 #include "rel_loc_window.h"
 
@@ -171,16 +172,16 @@ void rel_loc_special_keys(int key, __attribute__((unused)) int a, __attribute__(
 
   if (key == GLUT_KEY_UP){
     current_estimator += 1;
-    if (current_estimator >= ESTIMATOR_MAX){
+    if (current_estimator >= N_EKF){
       // wrap back to zero
       current_estimator = 0;
     }
   }
   if (key == GLUT_KEY_DOWN){
     current_estimator -= step_size;
-    if (current_estimator >= ESTIMATOR_MAX){
+    if (current_estimator >= N_EKF){
       // current estimator is unsigned > this wraps back to the highest ID
-      current_estimator = ESTIMATOR_MAX-1;
+      current_estimator = N_EKF-1;
     }
   }
 

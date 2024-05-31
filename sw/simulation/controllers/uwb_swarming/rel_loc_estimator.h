@@ -26,6 +26,7 @@ struct performance_metrics_t {
     error_stats_t c3;
     error_stats_t c5;
     error_stats_t icr;
+    float mean_NIS_all;
     float comp_time_us;
 };
 
@@ -57,6 +58,11 @@ protected:
     std::vector<bool> _use_secondary_range;
     float _self_input[EKF_IN_DIM];
 
+    /**
+     * @brief initialize the estimator when constructed (only call once)
+     */
+    void init();
+    
     /**
      * @brief get the index at which an agent is stored in the vectors
      * @param[in] id: ID of the agent to be localized
@@ -120,15 +126,35 @@ public:
     std::vector<uint16_t> _ids;                 // agent ids corresponding to blocks in the state space. Unused and timed out slots show _self_id
     std::vector<std::vector<float>> _state;     // state vector in blocks (by agent)
 
+    // improvements for ablation study (full/dynamic ekf only)
+    bool _enable_improved_initialization;
+    bool _enable_selective_secondary_range;
+    bool _enable_covariance_inflation;
+    bool _enable_withhold_measurements;
+    bool _enable_nis_agent_reset;
 
     /**
      * @brief create a new relative localization estimator
      * 
      * @param[in] self_id: ID of the drone running this estimator
-     * @param[in] type: One of the following: 1 (Reference), 2 (Full), 3 (Dynamic), 4 (Decoupled) 
+     * @param[in] type: One of the following: 1 (Reference), 2 (Full), 3 (Dynamic), 4 (Decoupled)
+     * @param[in] n_agents: Number of agents to track, optional
+     * @param[in] name: name in GUI (first 3 chars for logging), optional 
      */
     RelLocEstimator(const uint16_t self_id, uint8_t type);
+    RelLocEstimator(const uint16_t self_id, uint8_t type, uint16_t n_agents, std::string name);
     ~RelLocEstimator(){};
+
+    /**
+     * @brief enable all ambiguity removing improvements
+     */
+
+    void enable_all_ambiguity_improvements();
+
+    /**
+     * @brief enable/disable all ambiguity removing improvements for ablation study
+     */
+    void disable_all_ambiguity_improvements();
 
     /**
      * @brief resets the estimator to its original state at startup

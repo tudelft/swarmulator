@@ -60,13 +60,50 @@ void uwb_swarming::init(const uint16_t ID)
   // _swarm.init(ID);
   _ranging.init(ID);
 
-  _p_ekf[ESTIMATOR_NONE] = NULL;
-  _p_ekf[ESTIMATOR_EKF_REF] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_REF);
-  _p_ekf[ESTIMATOR_EKF_FULL] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_FULL);
-  _p_ekf[ESTIMATOR_EKF_DYNAMIC] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC);    
-  _p_ekf[ESTIMATOR_EKF_DECOUPLED] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DECOUPLED);
+  // Standard Comparison
+  #ifdef EKF_VARIANTS
+    _p_ekf[0] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_REF);
+    _p_ekf[1] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_FULL);
+    _p_ekf[2] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC);    
+    _p_ekf[3] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DECOUPLED);
+  #endif
 
-  _ranging_mode = RANGE_TO_CLOSEST;
+  // Dyn EKF evaluation
+  #ifdef EKF_DYNAMIC_NMAX
+    _p_ekf[0] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 5, "05dyn");
+    _p_ekf[1] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 8, "08dyn");
+    _p_ekf[2] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "10dyn");    
+    _p_ekf[3] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 15, "15dyn");
+  #endif
+
+  // Ful EKF ablation study
+  #ifdef EKF_FULL_ABLATION
+    _p_ekf[0] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "noo improvements");
+    _p_ekf[0]->disable_all_ambiguity_improvements();
+
+    _p_ekf[1] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "c00 improved init");
+    _p_ekf[1]->disable_all_ambiguity_improvements();
+    _p_ekf[1]->_enable_improved_initialization = true;
+
+    _p_ekf[2] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "d00 selective secondary");
+    _p_ekf[2]->disable_all_ambiguity_improvements();
+    _p_ekf[2]->_enable_selective_secondary_range = true;
+
+    _p_ekf[3] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "e00 cov inflation");
+    _p_ekf[3]->disable_all_ambiguity_improvements();
+    _p_ekf[3]->_enable_covariance_inflation = true;
+
+    _p_ekf[4] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "f00 withhold secondary");
+    _p_ekf[4]->disable_all_ambiguity_improvements();
+    _p_ekf[4]->_enable_withhold_measurements = true;
+
+    _p_ekf[5] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "g00 reset agents");
+    _p_ekf[5]->disable_all_ambiguity_improvements();
+    _p_ekf[5]->_enable_nis_agent_reset = true;
+
+    _p_ekf[6] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "all improvements");
+  #endif
+
 
   if (ID != 0)
   {
@@ -175,7 +212,7 @@ void uwb_swarming::state_estimation()
   std::vector<ekf_input_t> all_inputs;
   _ranging.get_all_ranging(all_measurements, all_inputs, _ref_time);
 
-  for (uint8_t iEst = 0; iEst < ESTIMATOR_MAX; iEst++)
+  for (uint8_t iEst = 0; iEst < N_EKF; iEst++)
   {
     if (_p_ekf[iEst] == NULL)
     {
@@ -232,7 +269,7 @@ void uwb_swarming::calculate_ekf_errors(){
     }
   }
   _agents_in_range = ids_in_comm_range_ordered.size();
-  for (uint8_t iEst = 0; iEst < ESTIMATOR_MAX; iEst++){
+  for (uint8_t iEst = 0; iEst < N_EKF; iEst++){
     if (_p_ekf[iEst] == NULL)
       {
         continue;
@@ -340,7 +377,7 @@ void uwb_swarming::log_write_header(){
   header << "time";           // col G.0
   header << "," << "n_icr";   // col G.1
   header << "," << "uwb_load";// col G.2
-  for (uint8_t iEst = 0; iEst < ESTIMATOR_MAX; iEst++){
+  for (uint8_t iEst = 0; iEst < N_EKF; iEst++){
     if (_p_ekf[iEst] != NULL){
       std::string short_name = _p_ekf[iEst]->_name.substr(0,3);
       header << "," << short_name << "_c1_abs";   // col E.0
@@ -352,6 +389,7 @@ void uwb_swarming::log_write_header(){
       header << "," << short_name << "_icr_abs";  // col E.6
       header << "," << short_name << "_icr_rel";  // col E.7
       header << "," << short_name << "_t_us";     // col E.8
+      header << "," << short_name << "_nis_all";  // col E.9
     }
   }
   header << std::endl;
@@ -364,7 +402,7 @@ void uwb_swarming::log_write_data(){
   data << "," << _agents_in_range;                  // col G.1
   data << std::fixed << std::setprecision(3); 
   data << "," << _ranging._evaluator._current_load; // col G.2
-  for (uint8_t iEst = 0; iEst < ESTIMATOR_MAX; iEst++){
+  for (uint8_t iEst = 0; iEst < N_EKF; iEst++){
     if (_p_ekf[iEst] != NULL){
       data << "," << _p_ekf[iEst]->_performance.c1.abs_mean;  // col E.0
       data << "," << _p_ekf[iEst]->_performance.c1.rel_mean;  // col E.1
@@ -375,6 +413,7 @@ void uwb_swarming::log_write_data(){
       data << "," << _p_ekf[iEst]->_performance.icr.abs_mean; // col E.6
       data << "," << _p_ekf[iEst]->_performance.icr.rel_mean; // col E.7
       data << "," << _p_ekf[iEst]->_performance.comp_time_us; // col E.8
+      data << "," << _p_ekf[iEst]->_performance.mean_NIS_all; // col E.9
     }
   }
   data << std::endl;
