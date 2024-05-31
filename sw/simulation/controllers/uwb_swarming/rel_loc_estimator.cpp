@@ -494,15 +494,15 @@ bool RelLocEstimator::initialize_agent(const uint16_t agent_id, uint16_t *idx){
     agent_initialization_data_t init_data;
     init_data.id = agent_id;
     init_data.timestamp = _current_time;
-    init_data.x0 = 0.0f;
-    init_data.y0 = 0.0f;
-    init_data.stdev_x = 100;
-    init_data.stdev_y = 100;
 
     switch (_est_type)
     {
     case ESTIMATOR_EKF_DECOUPLED:
         // use "lazy initialization"
+        init_data.x0 = 0.0f;
+        init_data.y0 = 0.0f;
+        init_data.stdev_x = 100;
+        init_data.stdev_y = 100;
         success = add_agent(init_data, idx);
         break;
 
@@ -516,14 +516,18 @@ bool RelLocEstimator::initialize_agent(const uint16_t agent_id, uint16_t *idx){
         break;
     
     default:
-        if (_enable_improved_initialization){
-            // geometric initialization from multiple range measurements
-            if (_ag_init->get_initial_position(agent_id, _current_time, &init_data)){
+        if (_ag_init->get_initial_position(agent_id, _current_time, &init_data)){
+            if (_enable_improved_initialization){
+                // geometric initialization from multiple range measurements
+                success = add_agent(init_data, idx);
+            } else {
+                // use "lazy initialization" (still need last range from init_data)
+                init_data.x0 = 0.0f;
+                init_data.y0 = 0.0f;
+                init_data.stdev_x = 100;
+                init_data.stdev_y = 100;
                 success = add_agent(init_data, idx);
             }
-        } else {
-            // use "lazy initialization"
-            success = add_agent(init_data, idx);
         }
         break;
     }
