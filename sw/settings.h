@@ -30,7 +30,7 @@
 #define MEAS_NOISE_DPSI 0.01f  // stdev of measurement noise on yaw rate in [rad/s]
 #define MEAS_NOISE_PSI 0.01f  // stdev of measurement noise on yaw measurement [rad/s]
 
-#define COMMUNICATION_RANGE 80
+#define COMMUNICATION_RANGE 20
 #define COMMUNICATION_BASE_INTERVAL 0.05f
 #define EKF_ESTIMATION_INTERVAL 0.01f
 #endif /*SETTINGS_H*/

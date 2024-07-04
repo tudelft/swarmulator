@@ -16,10 +16,27 @@
 #include "terminalinfo.h"
 
 // Evaluation modes (only ever activate one)
-// #define EKF_VARIANTS
+
+#define EKF_VARIANTS
+
 // #define EKF_DYNAMIC_NMAX
-#define EKF_FULL_ABLATION
+
+// #define EKF_LIMIT_TEST
+
+// #define EKF_ABLATION_FUL
+
+// #define EKF_ABLATION_DYN
+
 // end eval modes
+
+#ifdef EKF_ABLATION_FUL
+  #define EKF_ABLATION
+  #define ABLATION_TYPE ESTIMATOR_EKF_FULL
+#endif
+#ifdef EKF_ABLATION_DYN
+  #define EKF_ABLATION
+  #define ABLATION_TYPE ESTIMATOR_EKF_DYNAMIC
+#endif
 
 // #define COMMAND_LOCAL 1
 #define RANGING_TIMEOUT_TICKS 100
@@ -28,8 +45,8 @@
 #define ANIMATION_TIMEOUT 0.5f
 #define INFO_TEXT_UPDATE 1
 
-#ifdef EKF_FULL_ABLATION
-  #define N_EKF 7
+#ifdef EKF_ABLATION
+  #define N_EKF 8
 #else
   #define N_EKF 4
 #endif
@@ -75,6 +92,7 @@ private:
   // float _time_air_utilization_avg;
 
   FileLogger *_pFlogger;
+  FileLogger *_pFlogger_relpos;
 
   /**
    * @brief Construct the ekf_input of this agent
@@ -93,6 +111,10 @@ private:
 
   void log_write_header();
   void log_write_data();
+
+  void log_relpos_write_header();
+  void log_relpos_write_data();
+
 public:
   /**
    * @brief Construct a new uwb_swarming object

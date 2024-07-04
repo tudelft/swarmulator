@@ -26,7 +26,8 @@ struct performance_metrics_t {
     error_stats_t c3;
     error_stats_t c5;
     error_stats_t icr;
-    float mean_NIS_all;
+    float nis_sum;
+    float nis_dof;
     float comp_time_us;
 };
 
@@ -62,7 +63,7 @@ protected:
      * @brief initialize the estimator when constructed (only call once)
      */
     void init();
-    
+
     /**
      * @brief get the index at which an agent is stored in the vectors
      * @param[in] id: ID of the agent to be localized
@@ -169,6 +170,8 @@ public:
 
     void update_performance(std::vector<uint16_t> &ids_in_comm_range_ordered, std::vector<float> &relX, std::vector<float> &relY);
     void animate(const uint16_t target_ID);
+
+    bool get_state(const uint16_t target_id, float *x, float *y);
 };
 
 #endif // _REL_LOC_ESTIMATOR_H_

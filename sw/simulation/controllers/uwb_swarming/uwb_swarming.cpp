@@ -76,34 +76,51 @@ void uwb_swarming::init(const uint16_t ID)
     _p_ekf[3] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 15, "15dyn");
   #endif
 
-  // Ful EKF ablation study
-  #ifdef EKF_FULL_ABLATION
-    _p_ekf[0] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "noo improvements");
+  // EKF ablation study
+  #ifdef EKF_ABLATION
+    uint8_t ekf_ablation_type = ABLATION_TYPE;
+    _p_ekf[0] = new RelLocEstimator(this->ID, ekf_ablation_type, 10, "noo improvements");
     _p_ekf[0]->disable_all_ambiguity_improvements();
 
-    _p_ekf[1] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "c00 improved init");
+    _p_ekf[1] = new RelLocEstimator(this->ID, ekf_ablation_type, 10, "a00 improved init");
     _p_ekf[1]->disable_all_ambiguity_improvements();
     _p_ekf[1]->_enable_improved_initialization = true;
 
-    _p_ekf[2] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "d00 selective secondary");
+    _p_ekf[2] = new RelLocEstimator(this->ID, ekf_ablation_type, 10, "b00 cov inflation");
     _p_ekf[2]->disable_all_ambiguity_improvements();
-    _p_ekf[2]->_enable_selective_secondary_range = true;
+    _p_ekf[2]->_enable_covariance_inflation = true;
 
-    _p_ekf[3] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "e00 cov inflation");
+    _p_ekf[3] = new RelLocEstimator(this->ID, ekf_ablation_type, 10, "ab0 init and cov");
     _p_ekf[3]->disable_all_ambiguity_improvements();
+    _p_ekf[3]->_enable_improved_initialization = true;
     _p_ekf[3]->_enable_covariance_inflation = true;
 
-    _p_ekf[4] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "f00 withhold secondary");
+    _p_ekf[4] = new RelLocEstimator(this->ID, ekf_ablation_type, 10, "abc select secondary");
     _p_ekf[4]->disable_all_ambiguity_improvements();
-    _p_ekf[4]->_enable_withhold_measurements = true;
+    _p_ekf[4]->_enable_improved_initialization = true;
+    _p_ekf[4]->_enable_covariance_inflation = true;
+    _p_ekf[4]->_enable_selective_secondary_range = true;
 
-    _p_ekf[5] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "g00 reset agents");
+    _p_ekf[5] = new RelLocEstimator(this->ID, ekf_ablation_type, 10, "abd withhold secondary");
     _p_ekf[5]->disable_all_ambiguity_improvements();
-    _p_ekf[5]->_enable_nis_agent_reset = true;
+    _p_ekf[5]->_enable_improved_initialization = true;
+    _p_ekf[5]->_enable_covariance_inflation = true;
+    _p_ekf[5]->_enable_withhold_measurements = true;
 
-    _p_ekf[6] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC, 10, "all improvements");
+    _p_ekf[6] = new RelLocEstimator(this->ID, ekf_ablation_type, 10, "abe reset agents");
+    _p_ekf[6]->disable_all_ambiguity_improvements();
+    _p_ekf[6]->_enable_improved_initialization = true;
+    _p_ekf[6]->_enable_covariance_inflation = true;
+    _p_ekf[6]->_enable_nis_agent_reset = true;
+
+    _p_ekf[7] = new RelLocEstimator(this->ID, ekf_ablation_type, 10, "all improvements");
   #endif
-
+  #ifdef EKF_LIMIT_TEST
+    _p_ekf[0] = new RelLocEstimator(this->ID, ESTIMATOR_EKF_DYNAMIC);
+    _p_ekf[1] = NULL;
+    _p_ekf[2] = NULL;    
+    _p_ekf[3] = NULL;
+  #endif
 
   if (ID != 0)
   {
@@ -117,6 +134,12 @@ void uwb_swarming::init(const uint16_t ID)
     name << "log_drone_" << this->ID;
     _pFlogger = new FileLogger(name.str());
     log_write_header();
+
+    if (ID==0){
+      name << "_relpos";
+      _pFlogger_relpos = new FileLogger(name.str());
+      log_relpos_write_header();
+    }
   #endif
 
 }
@@ -236,6 +259,9 @@ void uwb_swarming::state_estimation()
   
   #ifdef LOG
     log_write_data();
+    if (ID==0){
+      log_relpos_write_data();
+    }
   #endif
 }
 
@@ -389,7 +415,8 @@ void uwb_swarming::log_write_header(){
       header << "," << short_name << "_icr_abs";  // col E.6
       header << "," << short_name << "_icr_rel";  // col E.7
       header << "," << short_name << "_t_us";     // col E.8
-      header << "," << short_name << "_nis_all";  // col E.9
+      header << "," << short_name << "_nis_sum";  // col E.9
+      header << "," << short_name << "_nis_dof";  // col E.10
     }
   }
   header << std::endl;
@@ -413,9 +440,62 @@ void uwb_swarming::log_write_data(){
       data << "," << _p_ekf[iEst]->_performance.icr.abs_mean; // col E.6
       data << "," << _p_ekf[iEst]->_performance.icr.rel_mean; // col E.7
       data << "," << _p_ekf[iEst]->_performance.comp_time_us; // col E.8
-      data << "," << _p_ekf[iEst]->_performance.mean_NIS_all; // col E.9
+      data << "," << _p_ekf[iEst]->_performance.nis_sum;      // col E.9
+      data << "," << _p_ekf[iEst]->_performance.nis_dof;      // col E.10
     }
   }
   data << std::endl;
   _pFlogger->write_data(data);
+}
+
+
+void uwb_swarming::log_relpos_write_header(){
+  std::stringstream header;
+  header << "time";           // col G.0
+  for (uint16_t iAgent=1; iAgent < nagents; iAgent++){
+    header << "," << "x" << iAgent; // col G.A.1
+    header << "," << "y" << iAgent; // col G.A.2
+  }
+  
+  for (uint8_t iEst = 0; iEst < N_EKF; iEst++){
+    if (_p_ekf[iEst] != NULL){
+      std::string short_name = _p_ekf[iEst]->_name.substr(0,3);
+      for (uint16_t iAgent=1; iAgent<nagents; iAgent++){
+        header << "," << short_name << "_x" << iAgent;   // col E.A.0
+        header << "," << short_name << "_y" << iAgent;   // col E.A.1
+      }
+    }
+  }
+  header << std::endl;
+  _pFlogger_relpos->write_data(header);
+}
+
+void uwb_swarming::log_relpos_write_data(){
+  std::stringstream data;
+  data << _ref_time;                                // col G.0
+  for (uint16_t iAgent=1; iAgent < nagents; iAgent++){
+    // Draw groundtruth
+    float dx_g = agents[iAgent]->state[STATE_X] - agents[ID]->state[STATE_X];
+    float dy_g = agents[iAgent]->state[STATE_Y] - agents[ID]->state[STATE_Y];
+    data << std::fixed << std::setprecision(3); 
+    data << "," << dx_g; // col G.A.1
+    data << "," << dy_g; // col G.A.2
+  }
+
+  for (uint8_t iEst = 0; iEst < N_EKF; iEst++){
+    if (_p_ekf[iEst] != NULL){
+      for (uint16_t iAgent=1; iAgent < nagents; iAgent++){
+        float dx_e, dy_e;
+        if (_p_ekf[iEst]->get_state(iAgent, &dx_e, &dy_e)){
+          data << "," << dx_e; // col E.A.0
+          data << "," << dy_e; // col E.A.1
+        } else {
+          data << "," << "nan"; // col E.A.0
+          data << "," << "nan"; // col E.A.1
+        }
+      }
+    }
+  }
+  data << std::endl;
+  _pFlogger_relpos->write_data(data);
 }

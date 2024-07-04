@@ -27,3 +27,4 @@ conf/state_action_matrices
 *plots*/
 *data*/
 *.pyc
+scripts/python/tools/rel_loc_evaluation/local

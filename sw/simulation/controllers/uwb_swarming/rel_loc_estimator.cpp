@@ -102,7 +102,8 @@ void RelLocEstimator::init(){
             _P[iAgent].push_back(MatrixFloat(EKF_ST_DIM, EKF_ST_DIM));
         }
 
-        _performance.mean_NIS_all = 1;
+        _performance.nis_sum = 1;
+        _performance.nis_dof = 0;
     }
 
     _ag_init = new AgentInitializer(_self_id);
@@ -214,13 +215,15 @@ void RelLocEstimator::step(const float time, ekf_input_t &self_input){
     float nis_all = 0;
     uint16_t count = 0;
     for (uint16_t iAgent=0; iAgent < _n_agents; iAgent++){
-        if ((_ids[iAgent] != _self_id) && (_current_time - _agent_added_timestamp[iAgent] > 2*NIS_GRACE_PERIOD)){
+        if ((_ids[iAgent] != _self_id) 
+            && (_current_time - _agent_added_timestamp[iAgent] > AGENT_INIT_PERIOD)){
             nis_all += _mean_NIS[iAgent];
             count++;
         }
     }
     if (count > 0){
-        _performance.mean_NIS_all = nis_all/count; // 20*_n_agents dof
+        _performance.nis_sum = NIS_WINDOW_SIZE * nis_all; // 20*_n_agents dof
+        _performance.nis_dof = NIS_WINDOW_SIZE * count;
         // _nis_all would have 20*_n_agents dof, so we're very conservative by using k=20
         // nis_all = nis_all/count;
         // if ( nis_all > CHI_SQUARED_20_0999/20){
@@ -324,6 +327,18 @@ void RelLocEstimator::update_performance(std::vector<uint16_t> &ids_in_comm_rang
     } else {
         _performance.icr.abs_mean = -1;
         _performance.icr.rel_mean = -1;
+    }
+}
+
+
+bool RelLocEstimator::get_state(const uint16_t target_id, float *x, float *y){
+    uint16_t idx;
+    if (get_index(target_id, &idx)){
+        *x = _state[idx][EKF_ST_X];
+        *y = _state[idx][EKF_ST_Y]; 
+        return true;
+    } else {
+        return false;
     }
 }
 
